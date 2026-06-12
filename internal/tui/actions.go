@@ -1,0 +1,80 @@
+package tui
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// pullRequestAction starts the GitHub CLI PR workflow and shows its output.
+func (m Model) pullRequestAction() (tea.Model, tea.Cmd) {
+	m.err = nil
+	m.notice = ""
+	m.gitOutput = "Running pull request workflow..."
+	return m.action("Pull request ready", false, func(ctx context.Context) (string, error) {
+		return m.runner.PullRequestOutput(ctx)
+	})
+}
+
+// syncAction starts pull --rebase followed by push through the Git runner.
+func (m Model) syncAction() (tea.Model, tea.Cmd) {
+	m.err = nil
+	m.notice = ""
+	m.gitOutput = "Running pull --rebase, then push..."
+	return m.action("Sync complete", true, func(ctx context.Context) (string, error) {
+		return m.runner.SyncOutput(ctx)
+	})
+}
+
+// withNotice shows a message to the user without running a command.
+func (m Model) withNotice(notice string) Model {
+	m.notice = notice
+	m.err = nil
+	m.gitOutput = notice
+	return m
+}
+
+// action starts a Git command and the spinner together. When the command
+// finishes, Update receives the result and refreshes the screen if needed.
+func (m Model) action(success string, refresh bool, fn func(context.Context) (string, error)) (tea.Model, tea.Cmd) {
+	cmd := runGitAction(success, refresh, fn)
+	if m.loading {
+		return m, cmd
+	}
+	m.loading = true
+	return m, tea.Batch(cmd, m.spinner.Tick)
+}
+
+// runGitAction runs a Git function in the way Bubble Tea expects background work.
+func runGitAction(success string, refresh bool, fn func(context.Context) (string, error)) tea.Cmd {
+	return func() tea.Msg {
+		output, err := fn(context.Background())
+		if err != nil {
+			return gitActionFinishedMsg{err: err}
+		}
+		if strings.TrimSpace(output) == "" {
+			output = success
+		}
+		return gitActionFinishedMsg{output: output, refresh: refresh}
+	}
+}
+
+// openYazi temporarily hands the terminal to yazi and refreshes after return.
+func openYazi() tea.Cmd {
+	return func() tea.Msg {
+		path, err := exec.LookPath("yazi")
+		if err != nil {
+			return gitActionFinishedMsg{err: fmt.Errorf("yazi is not installed or not on PATH")}
+		}
+		cmd := exec.Command(path)
+		return tea.ExecProcess(cmd, func(err error) tea.Msg {
+			if err != nil {
+				return gitActionFinishedMsg{err: err}
+			}
+			return gitActionFinishedMsg{output: "Returned from yazi", refresh: true}
+		})()
+	}
+}

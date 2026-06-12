@@ -1,0 +1,275 @@
+.TH GITM8 1 "June 2026" "gitm8" "User Commands"
+.SH NAME
+gitm8 \- terminal dashboard for common Git workflows
+.SH SYNOPSIS
+.SY gitm8
+.YS
+.SH DESCRIPTION
+.B gitm8
+is a small terminal user interface for day-to-day Git work.
+It opens an interactive dashboard for reviewing changes, staging and unstaging
+files, committing, fetching, pulling, pushing, syncing, switching branches,
+rebasing, viewing logs, opening pull requests, and switching repository-local
+Git identity profiles.
+.PP
+.B gitm8
+does not reimplement Git storage or transport.
+It shells out to the installed
+.BR git (1)
+binary, so existing Git configuration, hooks, SSH keys, credential helpers,
+commit signing, aliases used by Git itself, and repository settings remain in
+effect.
+.PP
+Run
+.B gitm8
+from inside the repository you want to work on.
+If launched outside a Git worktree, Git-backed actions fail in the same way the
+corresponding
+.BR git (1)
+command would fail.
+.SH DASHBOARD
+The screen contains a repository status bar, a Git output area, a changed-files
+panel, a preview/review/log panel, and a footer with key bindings.
+The top bar shows repository name, current branch, configured Git user,
+upstream, ahead/behind counts, staged and unstaged counts, last fetch time, and
+the active viewer mode.
+.PP
+The dashboard opens on the first changed file when changes are present.
+Press
+.B d
+to toggle the selected file between content preview and diff preview.
+Press
+.B 0
+to show the repository-wide review.
+File previews include lightweight theme-aware syntax highlighting for common
+source and configuration file types.
+.SS Keys
+.TP
+.B Up, Down
+Move the file, branch, profile, or picker selection.
+.TP
+.B Enter
+Preview the selected file, accept the selected picker item, or confirm an
+active text input.
+.TP
+.B 0
+Show repository-wide review.
+.TP
+.B d
+Toggle the selected file between diff and content preview.
+.TP
+.B s, S
+Stage the selected file, or stage all changes.
+.TP
+.B u, U
+Unstage the selected file, or unstage all changes.
+.TP
+.B c
+Commit staged changes.
+.TP
+.B f
+Fetch all remotes and prune stale remote-tracking refs.
+.TP
+.B p, P
+Pull with fast-forward only mode, or push.
+.TP
+.B x
+Sync by pulling with rebase, then pushing.
+.TP
+.B b
+Open the branch switcher.
+.TP
+.B l
+View recent commit logs.
+.TP
+.B r, Ctrl-p
+Create or show a pull request for the current branch using
+.BR gh (1) .
+.TP
+.B R, Ctrl-r
+Open the rebase picker.
+.TP
+.B i
+Switch repository-local Git identity profile.
+.TP
+.B h
+Open help.
+.TP
+.B o
+Expand or collapse the Git output box.
+.TP
+.B Tab
+Hide or show the footer key bar.
+.TP
+.B y
+Open
+.BR yazi (1),
+if installed.
+.TP
+.B j, k
+Scroll the viewer line by line.
+.TP
+.B PageDown, PageUp, Ctrl-f, Ctrl-b
+Scroll the viewer by a page.
+.TP
+.B g, G
+Jump the viewer to the top or bottom.
+.TP
+.B q, Ctrl-c
+Quit.
+.SH BRANCHES
+In the branch switcher, use
+.B Up
+and
+.B Down
+to choose a branch,
+.B Enter
+to switch to it,
+.B W
+to switch while carrying current changes through stash/pop,
+.B n
+to create a branch,
+.B D
+to delete the selected branch, and
+.B Esc
+to return to review mode.
+.PP
+The branch list shows local branches followed by remote-only branches.
+Remote branches are de-duplicated and shown without their remote prefix.
+.SH REBASE
+In the rebase picker, use
+.B Up
+and
+.B Down
+to choose a target branch and
+.B Enter
+to rebase the current branch onto it.
+If a rebase is already in progress, use
+.B c
+to continue,
+.B a
+to abort, or
+.B s
+to skip the current patch.
+.PP
+If the rebase stops on conflicts, resolve them with normal Git commands outside
+.BR gitm8 ,
+then continue from the dashboard or by running
+.BR "git rebase --continue" .
+.SH CONFIGURATION
+Configuration is loaded from
+.IR ~/.gitm8rc ,
+then
+.IR ~/.gitm8/credentials .
+Environment variables override defaults.
+.TP
+.B GITM8_DEFAULT_BRANCH
+Default branch name.
+Default:
+.BR main .
+.TP
+.B GITM8_EDITOR
+Editor used by workflows that need one.
+Default:
+.B EDITOR
+or
+.BR vi .
+.TP
+.B GITM8_THEME
+Dashboard color theme.
+.TP
+.B GITM8_CONFIRM_DESTRUCTIVE_ACTIONS
+Whether destructive actions should ask for confirmation where applicable.
+.TP
+.B GITM8_FETCH_ON_STARTUP
+Fetch from all remotes with pruning before the dashboard opens.
+.TP
+.B GITM8_SHOW_COMMIT_GRAPH
+Show graph lines in the commit log view.
+.SH THEMES
+Built-in themes:
+.PP
+.EX
+amber
+catppuccin
+catppuccin-frappe
+catppuccin-latte
+catppuccin-macchiato
+catppuccin-mocha
+cyan
+default
+forest
+highvis
+lime
+midnight
+mono
+ocean
+rose
+steel
+violet
+.EE
+.PP
+.B catppuccin
+maps to
+.BR catppuccin-mocha .
+.SH PROFILES
+Define switchable Git identities in
+.IR ~/.gitm8/profiles ,
+one per line:
+.PP
+.EX
+Work     = Ada Lovelace <ada@work.example>
+Personal = Ada <ada@personal.example>
+.EE
+.PP
+Selecting a profile runs
+.B git config user.name
+and
+.B git config user.email
+for the current repository only.
+The global Git identity is left untouched.
+.SH DEPENDENCIES
+.TP
+.BR git (1)
+Required. All repository operations use the installed Git binary.
+.TP
+.BR gh (1)
+Required for pull-request creation and viewing.
+Authenticate with
+.B gh auth login
+before using the dashboard pull-request key.
+.TP
+.BR yazi (1)
+Optional. Used only when pressing
+.B y
+in the dashboard.
+.SH EXIT STATUS
+.TP
+.B 0
+The dashboard exited successfully.
+.TP
+.B 2
+Unsupported command-line arguments were provided.
+.TP
+.B non-zero
+The dashboard failed to start or exited with an error.
+.SH EXAMPLES
+.TP
+Open the dashboard in the current repository:
+.EX
+cd path/to/project
+gitm8
+.EE
+.TP
+Open the dashboard with a specific theme:
+.EX
+GITM8_THEME=catppuccin gitm8
+.EE
+.SH SEE ALSO
+.BR git (1),
+.BR gh (1),
+.BR yazi (1)
+.SH BUGS
+Report issues at
+.UR https://github.com/b404dev/gitm8/issues
+.UE .

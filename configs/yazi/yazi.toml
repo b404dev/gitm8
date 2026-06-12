@@ -1,0 +1,20 @@
+[mgr]
+ratio = [1, 3, 4]
+sort_by = "natural"
+sort_dir_first = true
+linemode = "size"
+show_hidden = true
+show_symlink = true
+scrolloff = 8
+
+[preview]
+wrap = "yes"
+tab_size = 2
+max_width = 1600
+max_height = 1600
+image_filter = "lanczos3"
+image_quality = 85
+
+[which]
+sort_by = "key"
+sort_sensitive = false
