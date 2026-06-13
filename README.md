@@ -196,9 +196,11 @@ gh auth login
 
 Choose `g` to generate a title and description from the branch diff against the
 configured default branch, then create the PR. Choose `m` to write the PR
-yourself in `gh pr create`. The generated path first tries to show an existing
-PR for the current branch to avoid duplicates. If `gh` needs authentication, a
-pushed branch, or more information, the error appears in the git output box.
+yourself in `gh pr create`. `gitm8` does not push while creating a PR; push the
+branch first with `P` or normal Git. The generated path first tries to show an
+existing PR for the current branch to avoid duplicates. If `gh` needs
+authentication, a pushed branch, or more information, the error appears in the
+git output box.
 
 ### Git Identities
 

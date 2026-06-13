@@ -102,11 +102,19 @@ func TestCleanCommitSubjectKeepsFirstUsefulLine(t *testing.T) {
 
 // TestParsePullRequestDraft checks the title/body format requested from AI tools.
 func TestParsePullRequestDraft(t *testing.T) {
-	title, body := parsePullRequestDraft("TITLE: Add generated PR text\nBODY:\n## Summary\n- Added AI PR drafting")
+	title, body := parsePullRequestDraft(`{"title":"Add generated PR text","body":"## Summary\n- Added AI PR drafting"}`)
 	if title != "Add generated PR text" {
 		t.Fatalf("title = %q", title)
 	}
 	if body != "## Summary\n- Added AI PR drafting" {
 		t.Fatalf("body = %q", body)
+	}
+}
+
+// TestParsePullRequestDraftAllowsJSONFence accepts common fenced model output.
+func TestParsePullRequestDraftAllowsJSONFence(t *testing.T) {
+	title, body := parsePullRequestDraft("```json\n{\"title\":\"Fix PR flow\",\"body\":\"## Summary\\n- No push\"}\n```")
+	if title != "Fix PR flow" || body != "## Summary\n- No push" {
+		t.Fatalf("parsePullRequestDraft() = (%q, %q)", title, body)
 	}
 }

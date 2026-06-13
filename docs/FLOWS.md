@@ -186,6 +186,7 @@ Then pressing `g` in the pull request options:
 key: g
   -> actions.go: pullRequestAction()
   -> git.Runner.PullRequestOutput()
+  -> require current branch to already be pushed
   -> gh pr view, or generate title/body and gh pr create
   -> gitActionFinishedMsg
   -> handleGitActionFinished()

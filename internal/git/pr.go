@@ -2,10 +2,13 @@ package git
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
 )
+
+const maxPullRequestDiffBytes = 120000
 
 // PullRequestOutput uses GitHub CLI to show an open PR or create one for the branch.
 func (r Runner) PullRequestOutput(ctx context.Context, baseBranch string, provider string) (string, error) {
@@ -32,31 +35,23 @@ func (r Runner) PullRequestOutput(ctx context.Context, baseBranch string, provid
 		}
 	}
 
-	var outputs []string
 	if r.bestEffort(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}") == "" {
-		pushed, err := r.output(ctx, "push", "-u", "origin", branch)
-		if err != nil {
-			return pushed, err
-		}
-		outputs = append(outputs, pushed)
+		return "", fmt.Errorf("current branch is not pushed; push it first, then create the PR")
 	}
 
 	title, body, err := r.GeneratePullRequestDraft(ctx, baseBranch, provider)
 	if err != nil {
-		return joinOutput(outputs...), err
+		return "", err
 	}
 
 	out, err := r.commandOutput(ctx, "gh", "pr", "create", "--base", baseBranch, "--title", title, "--body", body)
 	if err != nil {
-		return joinOutput(append(outputs, out)...), err
+		return out, err
 	}
 	if strings.TrimSpace(out) == "" {
-		outputs = append(outputs, "Pull request created.")
-		return joinOutput(outputs...) + "\n", nil
+		return "Pull request created.\n", nil
 	}
 
-	outputs = append(outputs, out)
-	out = joinOutput(outputs...)
 	if !strings.HasSuffix(out, "\n") {
 		out += "\n"
 	}
@@ -82,6 +77,9 @@ func (r Runner) GeneratePullRequestDraft(ctx context.Context, baseBranch string,
 	if strings.TrimSpace(fullDiff) == "" {
 		return "", "", fmt.Errorf("no branch changes found versus %s", baseRef)
 	}
+	if len(fullDiff) > maxPullRequestDiffBytes {
+		return "", "", fmt.Errorf("branch diff is too large for AI PR generation; write the PR manually")
+	}
 
 	commits := strings.TrimSpace(r.bestEffort(ctx, "log", "--oneline", baseRef+"..HEAD"))
 	prompt := `You are the developer who made the code changes on this branch.
@@ -92,10 +90,8 @@ Guidelines:
 - Keep the title concise and practical.
 - Use a short markdown body with a Summary section and a Testing section.
 - If testing is not shown in the diff, say "Not run".
-- Return exactly this format:
-TITLE: <one-line title>
-BODY:
-<markdown body>
+- Return only valid JSON with this shape:
+{"title":"one-line title","body":"markdown body"}
 
 BASE BRANCH:
 ` + baseBranch + `
@@ -120,6 +116,23 @@ FULL DIFF:
 	return title, body, nil
 }
 
+// ManualPullRequestCommand builds the interactive gh command used when the user
+// wants to write the title and body themselves.
+func (r Runner) ManualPullRequestCommand(baseBranch string) (*exec.Cmd, error) {
+	if strings.TrimSpace(baseBranch) == "" {
+		baseBranch = "main"
+	}
+	path, err := exec.LookPath("gh")
+	if err != nil {
+		return nil, fmt.Errorf("gh CLI is required for pull requests")
+	}
+	cmd := exec.Command(path, "pr", "create", "--base", baseBranch)
+	if r.Dir != "" {
+		cmd.Dir = r.Dir
+	}
+	return cmd, nil
+}
+
 func (r Runner) pullRequestBaseRef(ctx context.Context, baseBranch string) string {
 	if strings.TrimSpace(r.bestEffort(ctx, "rev-parse", "--verify", baseBranch)) != "" {
 		return baseBranch
@@ -133,16 +146,17 @@ func (r Runner) pullRequestBaseRef(ctx context.Context, baseBranch string) strin
 
 func parsePullRequestDraft(out string) (string, string) {
 	out = strings.TrimSpace(out)
-	titlePrefix := "TITLE:"
-	bodyPrefix := "BODY:"
-	titleAt := strings.Index(out, titlePrefix)
-	bodyAt := strings.Index(out, bodyPrefix)
-	if titleAt < 0 || bodyAt < 0 || bodyAt < titleAt {
+	out = strings.TrimPrefix(out, "```json")
+	out = strings.TrimPrefix(out, "```")
+	out = strings.TrimSuffix(out, "```")
+	out = strings.TrimSpace(out)
+
+	var draft struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(out), &draft); err != nil {
 		return "", ""
 	}
-
-	title := strings.TrimSpace(out[titleAt+len(titlePrefix) : bodyAt])
-	body := strings.TrimSpace(out[bodyAt+len(bodyPrefix):])
-	title = strings.Trim(title, "`\"'")
-	return title, body
+	return strings.TrimSpace(draft.Title), strings.TrimSpace(draft.Body)
 }
