@@ -67,6 +67,12 @@ type gitActionFinishedMsg struct {
 	err     error
 }
 
+// commitMessageGeneratedMsg means Codex finished generating a commit subject.
+type commitMessageGeneratedMsg struct {
+	message string
+	err     error
+}
+
 // branchesLoadedMsg means the branch picker has fresh branch data.
 type branchesLoadedMsg struct {
 	info     git.RepoInfo

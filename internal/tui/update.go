@@ -38,6 +38,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case gitActionFinishedMsg:
 		return m.handleGitActionFinished(msg)
+	case commitMessageGeneratedMsg:
+		return m.handleCommitMessageGenerated(msg), nil
 	}
 
 	var cmd tea.Cmd
@@ -323,16 +325,38 @@ func (m Model) handleGitActionFinished(msg gitActionFinishedMsg) (tea.Model, tea
 	return m, nil
 }
 
+// handleCommitMessageGenerated puts Codex's subject into the commit input.
+func (m Model) handleCommitMessageGenerated(msg commitMessageGeneratedMsg) Model {
+	m.loading = false
+	m.err = msg.err
+	m.mode = "commit"
+	m.commit.Focus()
+	if msg.err != nil {
+		m.notice = ""
+		m.gitOutput = msg.err.Error()
+		return m
+	}
+	m.commit.SetValue(msg.message)
+	m.notice = "Generated commit message"
+	m.gitOutput = msg.message
+	return m
+}
+
 // Commit Screen Keys
 
 // updateCommit handles typing a commit message and pressing enter to commit.
 func (m Model) updateCommit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.loading {
+		return m, nil
+	}
 	switch msg.String() {
 	case "esc":
 		m.mode = "review"
 		m.commit.Blur()
 		m.notice = "Commit cancelled"
 		return m, nil
+	case "ctrl+g":
+		return m.generateCommitMessageAction()
 	case "enter":
 		message := strings.TrimSpace(m.commit.Value())
 		if message == "" {

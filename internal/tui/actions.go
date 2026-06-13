@@ -29,6 +29,20 @@ func (m Model) syncAction() (tea.Model, tea.Cmd) {
 	})
 }
 
+// generateCommitMessageAction asks Codex for a commit message and keeps the
+// user on the commit screen when it returns.
+func (m Model) generateCommitMessageAction() (tea.Model, tea.Cmd) {
+	m.err = nil
+	m.notice = ""
+	m.gitOutput = "Asking Codex to write a commit message..."
+	cmd := runGenerateCommitMessage(m.runner.GenerateCommitMessage)
+	if m.loading {
+		return m, cmd
+	}
+	m.loading = true
+	return m, tea.Batch(cmd, m.spinner.Tick)
+}
+
 // withNotice shows a message to the user without running a command.
 func (m Model) withNotice(notice string) Model {
 	m.notice = notice
@@ -59,6 +73,19 @@ func runGitAction(success string, refresh bool, fn func(context.Context) (string
 			output = success
 		}
 		return gitActionFinishedMsg{output: output, refresh: refresh}
+	}
+}
+
+func runGenerateCommitMessage(fn func(context.Context) (string, error)) tea.Cmd {
+	return func() tea.Msg {
+		message, err := fn(context.Background())
+		if err != nil {
+			return commitMessageGeneratedMsg{err: err}
+		}
+		if strings.TrimSpace(message) == "" {
+			return commitMessageGeneratedMsg{err: fmt.Errorf("Codex returned an empty commit message")}
+		}
+		return commitMessageGeneratedMsg{message: message}
 	}
 }
 

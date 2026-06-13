@@ -63,7 +63,7 @@ func (m Model) panelWidth() int {
 func (m Model) header() string {
 	parts := []string{m.topBar(), m.outputBar()}
 	if m.mode == "commit" {
-		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Commit message")+"\n"+m.commit.View()+"\n"+mutedStyle.Render("enter: commit  esc: cancel")))
+		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Commit message")+"\n"+m.commit.View()+"\n"+mutedStyle.Render("ctrl+g: generate  enter: commit  esc: cancel")))
 	}
 	if m.mode == "new-branch" {
 		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Create branch")+"\n"+m.branchInput.View()+"\n"+mutedStyle.Render("enter: create  esc: cancel")))
@@ -370,7 +370,7 @@ func (m Model) helpView() string {
 		{"d", "toggle the selected file between diff and contents"},
 		{"s / S", "stage selected file / stage all"},
 		{"u / U", "unstage selected file / unstage all"},
-		{"c", "commit staged changes"},
+		{"c", "commit staged changes (ctrl+g generates a message in commit mode)"},
 		{"f", "fetch (--all --prune)"},
 		{"p / P", "pull (--ff-only) / push"},
 		{"x", "sync: pull --rebase, then push"},

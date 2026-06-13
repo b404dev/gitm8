@@ -3,6 +3,8 @@ package git
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 )
 
 // Status And Sync Commands
@@ -83,6 +85,64 @@ func (r Runner) Commit(ctx context.Context, message string) error {
 // CommitOutput creates a commit and returns Git's normal output for the output panel.
 func (r Runner) CommitOutput(ctx context.Context, message string) (string, error) {
 	return r.output(ctx, "commit", "-m", message)
+}
+
+// GenerateCommitMessage asks Codex for one commit subject based on staged changes.
+func (r Runner) GenerateCommitMessage(ctx context.Context) (string, error) {
+	diff, err := r.StagedDiff(ctx)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(diff) == "" {
+		return "", fmt.Errorf("no staged changes to describe")
+	}
+
+	outFile, err := os.CreateTemp("", "gitm8-commit-message-*")
+	if err != nil {
+		return "", err
+	}
+	outPath := outFile.Name()
+	outFile.Close()
+	defer os.Remove(outPath)
+
+	prompt := `Write a Git commit subject for the staged diff below.
+Return only the subject line.
+Use imperative mood.
+Keep it under 72 characters.
+Do not wrap it in quotes or markdown.
+
+STAGED DIFF:
+` + diff
+
+	_, err = r.commandInputOutput(ctx, prompt, "codex", "exec",
+		"--sandbox", "read-only",
+		"--color", "never",
+		"--ephemeral",
+		"-o", outPath,
+		"-",
+	)
+	if err != nil {
+		return "", err
+	}
+
+	message, err := os.ReadFile(outPath)
+	if err != nil {
+		return "", err
+	}
+	return cleanCommitSubject(string(message)), nil
+}
+
+func cleanCommitSubject(message string) string {
+	message = strings.TrimSpace(message)
+	message = strings.Trim(message, "`\"'")
+	lines := strings.Split(message, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(strings.Trim(line, "`\"'"))
+		if line != "" {
+			return line
+		}
+	}
+	return ""
 }
 
 // Push Output Helpers

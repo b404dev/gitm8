@@ -203,6 +203,8 @@ branch, or more information, the error appears in the git output box.
 Press `i` to choose a configured identity profile. See [Profiles](#profiles).
 
 Commit and new-branch inputs accept `enter` to confirm and `esc` to cancel.
+In the commit input, press `ctrl+g` to ask the local `codex` CLI to generate a
+commit message from the currently staged changes and populate the input box.
 
 ## Configuration
 

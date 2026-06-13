@@ -66,6 +66,11 @@ Unstage the selected file, or unstage all changes.
 .TP
 .B c
 Commit staged changes.
+Inside the commit prompt,
+.B Ctrl-g
+asks the local
+.BR codex (1)
+CLI to generate a commit message from staged changes and populate the input.
 .TP
 .B f
 Fetch all remotes and prune stale remote-tracking refs.
@@ -239,6 +244,11 @@ Authenticate with
 .B gh auth login
 before using the dashboard pull-request key.
 .TP
+.BR codex (1)
+Optional. Used only when pressing
+.B Ctrl-g
+inside the commit prompt.
+.TP
 .BR yazi (1)
 Optional. Used only when pressing
 .B y
@@ -268,6 +278,7 @@ GITM8_THEME=catppuccin gitm8
 .SH SEE ALSO
 .BR git (1),
 .BR gh (1),
+.BR codex (1),
 .BR yazi (1)
 .SH BUGS
 Report issues at

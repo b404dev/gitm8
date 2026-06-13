@@ -20,8 +20,8 @@ func (r Runner) output(ctx context.Context, args ...string) (string, error) {
 	return r.commandOutput(ctx, "git", args...)
 }
 
-// commandOutput starts a git or gh process, captures output, and turns failures
-// into readable errors.
+// commandOutput starts a git, gh, or helper process, captures output, and turns
+// failures into readable errors.
 func (r Runner) commandOutput(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	if r.Dir != "" {
@@ -33,6 +33,29 @@ func (r Runner) commandOutput(ctx context.Context, name string, args ...string) 
 	if name == "gh" {
 		cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=1")
 	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		detail := strings.TrimSpace(combinedOutput(stdout.String(), stderr.String()))
+		if detail == "" {
+			detail = err.Error()
+		}
+		return "", fmt.Errorf("%s %s: %s", name, strings.Join(args, " "), detail)
+	}
+	return stdout.String(), nil
+}
+
+// commandInputOutput is commandOutput with stdin attached.
+func (r Runner) commandInputOutput(ctx context.Context, input string, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	if r.Dir != "" {
+		cmd.Dir = r.Dir
+	}
+	cmd.Stdin = strings.NewReader(input)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

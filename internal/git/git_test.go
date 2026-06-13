@@ -89,3 +89,13 @@ func TestRemoteToWebURL(t *testing.T) {
 		}
 	}
 }
+
+// TestCleanCommitSubjectKeepsFirstUsefulLine checks Codex output is reduced to
+// the single-line value the commit input expects.
+func TestCleanCommitSubjectKeepsFirstUsefulLine(t *testing.T) {
+	got := cleanCommitSubject("\n`Update branch deletion docs`\n\nExtra detail\n")
+	want := "Update branch deletion docs"
+	if got != want {
+		t.Fatalf("cleanCommitSubject() = %q, want %q", got, want)
+	}
+}

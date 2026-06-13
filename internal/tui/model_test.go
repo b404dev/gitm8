@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/b404dev/gitm8/internal/config"
 	"github.com/b404dev/gitm8/internal/git"
 )
 
@@ -75,6 +76,25 @@ func TestBranchesViewShowsSwitchWithChangesKey(t *testing.T) {
 	got := branchesView([]string{"main"}, 0, 0, 5)
 	if !strings.Contains(got, "W to switch with changes") {
 		t.Fatalf("branchesView() = %q, want switch-with-changes hint", got)
+	}
+}
+
+// TestHandleCommitMessageGeneratedPopulatesInput checks generated text stays in
+// the commit prompt instead of replacing the review panel.
+func TestHandleCommitMessageGeneratedPopulatesInput(t *testing.T) {
+	m := New(git.Runner{}, config.Config{Theme: "default"})
+	m.loading = true
+	m.mode = "commit"
+
+	got := m.handleCommitMessageGenerated(commitMessageGeneratedMsg{message: "Update commit flow"})
+	if got.loading {
+		t.Fatal("loading = true, want false")
+	}
+	if got.mode != "commit" {
+		t.Fatalf("mode = %q, want commit", got.mode)
+	}
+	if got.commit.Value() != "Update commit flow" {
+		t.Fatalf("commit value = %q, want generated message", got.commit.Value())
 	}
 }
 
