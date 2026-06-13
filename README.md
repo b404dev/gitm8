@@ -205,6 +205,8 @@ Press `i` to choose a configured identity profile. See [Profiles](#profiles).
 Commit and new-branch inputs accept `enter` to confirm and `esc` to cancel.
 In the commit input, press `ctrl+g` to ask the local `codex` CLI to generate a
 commit message from the currently staged changes and populate the input box.
+Set `GITM8_COMMIT_MESSAGE_PROVIDER=claude` to use the local `claude` CLI
+instead.
 
 ## Configuration
 
@@ -218,7 +220,10 @@ export GITM8_THEME="catppuccin"
 export GITM8_CONFIRM_DESTRUCTIVE_ACTIONS="true"
 export GITM8_FETCH_ON_STARTUP="false"
 export GITM8_SHOW_COMMIT_GRAPH="true"
+export GITM8_COMMIT_MESSAGE_PROVIDER="codex" # codex or claude
 ```
+
+An example config is available at [`configs/gitm8rc.example`](configs/gitm8rc.example).
 
 Secrets should normally stay in Git credential helpers, SSH agents, SSH keys,
 environment variables, or the OS keychain.

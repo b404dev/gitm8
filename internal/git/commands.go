@@ -87,8 +87,9 @@ func (r Runner) CommitOutput(ctx context.Context, message string) (string, error
 	return r.output(ctx, "commit", "-m", message)
 }
 
-// GenerateCommitMessage asks Codex for one commit subject based on staged changes.
-func (r Runner) GenerateCommitMessage(ctx context.Context) (string, error) {
+// GenerateCommitMessage asks the configured AI CLI for one commit subject based
+// on staged changes.
+func (r Runner) GenerateCommitMessage(ctx context.Context, provider string) (string, error) {
 	diff, err := r.StagedDiff(ctx)
 	if err != nil {
 		return "", err
@@ -96,14 +97,6 @@ func (r Runner) GenerateCommitMessage(ctx context.Context) (string, error) {
 	if strings.TrimSpace(diff) == "" {
 		return "", fmt.Errorf("no staged changes to describe")
 	}
-
-	outFile, err := os.CreateTemp("", "gitm8-commit-message-*")
-	if err != nil {
-		return "", err
-	}
-	outPath := outFile.Name()
-	outFile.Close()
-	defer os.Remove(outPath)
 
 	prompt := `You are the developer who made the staged code changes below.
 Write the Git commit subject you would use for this commit.
@@ -118,6 +111,33 @@ Guidelines:
 
 STAGED DIFF:
 ` + diff
+
+	var message string
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "claude":
+		message, err = r.commandInputOutput(ctx, prompt, "claude",
+			"-p",
+			"--permission-mode", "dontAsk",
+			"--output-format", "text",
+			"--no-session-persistence",
+		)
+	default:
+		message, err = r.generateCodexCommitMessage(ctx, prompt)
+	}
+	if err != nil {
+		return "", err
+	}
+	return cleanCommitSubject(message), nil
+}
+
+func (r Runner) generateCodexCommitMessage(ctx context.Context, prompt string) (string, error) {
+	outFile, err := os.CreateTemp("", "gitm8-commit-message-*")
+	if err != nil {
+		return "", err
+	}
+	outPath := outFile.Name()
+	outFile.Close()
+	defer os.Remove(outPath)
 
 	_, err = r.commandInputOutput(ctx, prompt, "codex", "exec",
 		"--sandbox", "read-only",
@@ -134,7 +154,7 @@ STAGED DIFF:
 	if err != nil {
 		return "", err
 	}
-	return cleanCommitSubject(string(message)), nil
+	return string(message), nil
 }
 
 func cleanCommitSubject(message string) string {

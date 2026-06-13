@@ -17,6 +17,7 @@ type Config struct {
 	ConfirmDestructiveActions bool
 	FetchOnStartup            bool
 	ShowCommitGraph           bool
+	CommitMessageProvider     string
 	GithubToken               string
 	GitlabToken               string
 	Profiles                  []Profile
@@ -102,6 +103,7 @@ func defaults() Config {
 		ConfirmDestructiveActions: true,
 		FetchOnStartup:            false,
 		ShowCommitGraph:           true,
+		CommitMessageProvider:     "codex",
 	}
 }
 
@@ -150,8 +152,18 @@ func applyEnv(cfg *Config) {
 	cfg.ConfirmDestructiveActions = envBool("GITM8_CONFIRM_DESTRUCTIVE_ACTIONS", cfg.ConfirmDestructiveActions)
 	cfg.FetchOnStartup = envBool("GITM8_FETCH_ON_STARTUP", cfg.FetchOnStartup)
 	cfg.ShowCommitGraph = envBool("GITM8_SHOW_COMMIT_GRAPH", cfg.ShowCommitGraph)
+	cfg.CommitMessageProvider = normalizeCommitMessageProvider(envString("GITM8_COMMIT_MESSAGE_PROVIDER", cfg.CommitMessageProvider))
 	cfg.GithubToken = os.Getenv("GITM8_GITHUB_TOKEN")
 	cfg.GitlabToken = os.Getenv("GITM8_GITLAB_TOKEN")
+}
+
+func normalizeCommitMessageProvider(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "claude":
+		return "claude"
+	default:
+		return "codex"
+	}
 }
 
 // envString returns an environment value or the provided fallback.

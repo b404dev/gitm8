@@ -34,8 +34,11 @@ func (m Model) syncAction() (tea.Model, tea.Cmd) {
 func (m Model) generateCommitMessageAction() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.notice = ""
-	m.gitOutput = "Asking Codex to write a commit message..."
-	cmd := runGenerateCommitMessage(m.runner.GenerateCommitMessage)
+	provider := m.config.CommitMessageProvider
+	m.gitOutput = "Asking " + provider + " to generate a commit message..."
+	cmd := runGenerateCommitMessage(func(ctx context.Context) (string, error) {
+		return m.runner.GenerateCommitMessage(ctx, provider)
+	})
 	if m.loading {
 		return m, cmd
 	}

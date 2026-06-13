@@ -68,9 +68,8 @@ Unstage the selected file, or unstage all changes.
 Commit staged changes.
 Inside the commit prompt,
 .B Ctrl-g
-asks the local
-.BR codex (1)
-CLI to generate a commit message from staged changes and populate the input.
+asks the configured AI CLI to generate a commit message from staged changes and
+populate the input.
 .TP
 .B f
 Fetch all remotes and prune stale remote-tracking refs.
@@ -191,6 +190,17 @@ Fetch from all remotes with pruning before the dashboard opens.
 .TP
 .B GITM8_SHOW_COMMIT_GRAPH
 Show graph lines in the commit log view.
+.TP
+.B GITM8_COMMIT_MESSAGE_PROVIDER
+AI CLI used by
+.B Ctrl-g
+inside the commit prompt.
+Supported values:
+.B codex
+and
+.BR claude .
+Default:
+.BR codex .
 .SH THEMES
 Built-in themes:
 .PP
@@ -247,7 +257,13 @@ before using the dashboard pull-request key.
 .BR codex (1)
 Optional. Used only when pressing
 .B Ctrl-g
-inside the commit prompt.
+inside the commit prompt with the default commit-message provider.
+.TP
+.BR claude (1)
+Optional. Used only when
+.B GITM8_COMMIT_MESSAGE_PROVIDER
+is set to
+.BR claude .
 .TP
 .BR yazi (1)
 Optional. Used only when pressing
@@ -279,6 +295,7 @@ GITM8_THEME=catppuccin gitm8
 .BR git (1),
 .BR gh (1),
 .BR codex (1),
+.BR claude (1),
 .BR yazi (1)
 .SH BUGS
 Report issues at

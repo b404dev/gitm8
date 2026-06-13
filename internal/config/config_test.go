@@ -46,3 +46,22 @@ func TestParseIdentity(t *testing.T) {
 		}
 	}
 }
+
+// TestNormalizeCommitMessageProvider keeps unsupported values on the safe default.
+func TestNormalizeCommitMessageProvider(t *testing.T) {
+	cases := []struct {
+		value string
+		want  string
+	}{
+		{"codex", "codex"},
+		{"claude", "claude"},
+		{" Claude ", "claude"},
+		{"unknown", "codex"},
+		{"", "codex"},
+	}
+	for _, tc := range cases {
+		if got := normalizeCommitMessageProvider(tc.value); got != tc.want {
+			t.Errorf("normalizeCommitMessageProvider(%q) = %q, want %q", tc.value, got, tc.want)
+		}
+	}
+}
