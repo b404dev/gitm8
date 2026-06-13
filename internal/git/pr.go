@@ -88,8 +88,7 @@ Write a pull request title and description for everything changed versus the bas
 Guidelines:
 - Describe the user-visible or developer-visible change, not the file list.
 - Keep the title concise and practical.
-- Use a short markdown body with a Summary section and a Testing section.
-- If testing is not shown in the diff, say "Not run".
+- Use a short markdown body with a Summary section.
 - Return only valid JSON with this shape:
 {"title":"one-line title","body":"markdown body"}
 
