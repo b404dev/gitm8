@@ -105,11 +105,16 @@ func (r Runner) GenerateCommitMessage(ctx context.Context) (string, error) {
 	outFile.Close()
 	defer os.Remove(outPath)
 
-	prompt := `Write a Git commit subject for the staged diff below.
-Return only the subject line.
-Use imperative mood.
-Keep it under 72 characters.
-Do not wrap it in quotes or markdown.
+	prompt := `You are the developer who made the staged code changes below.
+Write the Git commit subject you would use for this commit.
+
+Guidelines:
+- Describe what changed, not that files changed.
+- Prefer a concise, practical developer voice.
+- Use imperative mood, like "Add", "Fix", "Update", or "Remove".
+- Keep it under 72 characters.
+- Return only one subject line.
+- Do not include quotes, markdown, bullets, explanations, or alternatives.
 
 STAGED DIFF:
 ` + diff
