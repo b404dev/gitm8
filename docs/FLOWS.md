@@ -179,7 +179,7 @@ key: r
   -> update.go: updateDashboardKey()
   -> actions.go: pullRequestAction()
   -> git.Runner.PullRequestOutput()
-  -> gh pr view or gh pr create --fill
+  -> gh pr view, or generate title/body and gh pr create
   -> gitActionFinishedMsg
   -> handleGitActionFinished()
   -> View()

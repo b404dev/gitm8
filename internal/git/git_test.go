@@ -99,3 +99,14 @@ func TestCleanCommitSubjectKeepsFirstUsefulLine(t *testing.T) {
 		t.Fatalf("cleanCommitSubject() = %q, want %q", got, want)
 	}
 }
+
+// TestParsePullRequestDraft checks the title/body format requested from AI tools.
+func TestParsePullRequestDraft(t *testing.T) {
+	title, body := parsePullRequestDraft("TITLE: Add generated PR text\nBODY:\n## Summary\n- Added AI PR drafting")
+	if title != "Add generated PR text" {
+		t.Fatalf("title = %q", title)
+	}
+	if body != "## Summary\n- Added AI PR drafting" {
+		t.Fatalf("body = %q", body)
+	}
+}

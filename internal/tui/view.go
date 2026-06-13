@@ -404,7 +404,7 @@ func (m Model) helpView() string {
 	for _, line := range []string{
 		"GITM8_DEFAULT_BRANCH", "GITM8_EDITOR", "GITM8_THEME",
 		"GITM8_CONFIRM_DESTRUCTIVE_ACTIONS", "GITM8_FETCH_ON_STARTUP",
-		"GITM8_SHOW_COMMIT_GRAPH", "GITM8_COMMIT_MESSAGE_PROVIDER",
+		"GITM8_SHOW_COMMIT_GRAPH", "GITM8_AI_PROVIDER",
 	} {
 		fmt.Fprintf(&b, "    %s\n", line)
 	}

@@ -89,6 +89,10 @@ View recent commit logs.
 .B r, Ctrl-p
 Create or show a pull request for the current branch using
 .BR gh (1) .
+When creating a new pull request,
+.B gitm8
+asks the configured AI provider to draft the title and body from the branch diff
+against the configured default branch.
 .TP
 .B R, Ctrl-r
 Open the rebase picker.
@@ -191,10 +195,8 @@ Fetch from all remotes with pruning before the dashboard opens.
 .B GITM8_SHOW_COMMIT_GRAPH
 Show graph lines in the commit log view.
 .TP
-.B GITM8_COMMIT_MESSAGE_PROVIDER
-AI CLI used by
-.B Ctrl-g
-inside the commit prompt.
+.B GITM8_AI_PROVIDER
+AI CLI used for generated commit messages and pull request text.
 Supported values:
 .B codex
 and
@@ -255,13 +257,12 @@ Authenticate with
 before using the dashboard pull-request key.
 .TP
 .BR codex (1)
-Optional. Used only when pressing
-.B Ctrl-g
-inside the commit prompt with the default commit-message provider.
+Optional. Default AI provider for generated commit messages and pull request
+text.
 .TP
 .BR claude (1)
 Optional. Used only when
-.B GITM8_COMMIT_MESSAGE_PROVIDER
+.B GITM8_AI_PROVIDER
 is set to
 .BR claude .
 .TP

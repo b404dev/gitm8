@@ -13,9 +13,10 @@ import (
 func (m Model) pullRequestAction() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.notice = ""
-	m.gitOutput = "Running pull request workflow..."
+	provider := m.config.AIProvider
+	m.gitOutput = "Asking " + provider + " to generate pull request text..."
 	return m.action("Pull request ready", false, func(ctx context.Context) (string, error) {
-		return m.runner.PullRequestOutput(ctx)
+		return m.runner.PullRequestOutput(ctx, m.config.DefaultBranch, provider)
 	})
 }
 
@@ -34,7 +35,7 @@ func (m Model) syncAction() (tea.Model, tea.Cmd) {
 func (m Model) generateCommitMessageAction() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.notice = ""
-	provider := m.config.CommitMessageProvider
+	provider := m.config.AIProvider
 	m.gitOutput = "Asking " + provider + " to generate a commit message..."
 	cmd := runGenerateCommitMessage(func(ctx context.Context) (string, error) {
 		return m.runner.GenerateCommitMessage(ctx, provider)

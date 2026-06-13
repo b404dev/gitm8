@@ -195,8 +195,10 @@ gh auth login
 ```
 
 `gitm8` first tries to show an existing PR for the current branch. If none
-exists, it runs `gh pr create --fill`. If `gh` needs authentication, a pushed
-branch, or more information, the error appears in the git output box.
+exists, it asks the configured AI provider to draft a title and description from
+the branch diff against the configured default branch, then runs `gh pr create`.
+If `gh` needs authentication, a pushed branch, or more information, the error
+appears in the git output box.
 
 ### Git Identities
 
@@ -205,8 +207,7 @@ Press `i` to choose a configured identity profile. See [Profiles](#profiles).
 Commit and new-branch inputs accept `enter` to confirm and `esc` to cancel.
 In the commit input, press `ctrl+g` to ask the local `codex` CLI to generate a
 commit message from the currently staged changes and populate the input box.
-Set `GITM8_COMMIT_MESSAGE_PROVIDER=claude` to use the local `claude` CLI
-instead.
+Set `GITM8_AI_PROVIDER=claude` to use the local `claude` CLI instead.
 
 ## Configuration
 
@@ -220,7 +221,7 @@ export GITM8_THEME="catppuccin"
 export GITM8_CONFIRM_DESTRUCTIVE_ACTIONS="true"
 export GITM8_FETCH_ON_STARTUP="false"
 export GITM8_SHOW_COMMIT_GRAPH="true"
-export GITM8_COMMIT_MESSAGE_PROVIDER="codex" # codex or claude
+export GITM8_AI_PROVIDER="codex" # codex or claude
 ```
 
 An example config is available at [`configs/gitm8rc.example`](configs/gitm8rc.example).

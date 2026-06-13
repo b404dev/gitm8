@@ -112,25 +112,26 @@ Guidelines:
 STAGED DIFF:
 ` + diff
 
-	var message string
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "claude":
-		message, err = r.commandInputOutput(ctx, prompt, "claude",
-			"-p",
-			"--permission-mode", "dontAsk",
-			"--output-format", "text",
-			"--no-session-persistence",
-		)
-	default:
-		message, err = r.generateCodexCommitMessage(ctx, prompt)
-	}
+	message, err := r.generateAIText(ctx, provider, prompt)
 	if err != nil {
 		return "", err
 	}
 	return cleanCommitSubject(message), nil
 }
 
-func (r Runner) generateCodexCommitMessage(ctx context.Context, prompt string) (string, error) {
+func (r Runner) generateAIText(ctx context.Context, provider string, prompt string) (string, error) {
+	if strings.ToLower(strings.TrimSpace(provider)) == "claude" {
+		return r.commandInputOutput(ctx, prompt, "claude",
+			"-p",
+			"--permission-mode", "dontAsk",
+			"--output-format", "text",
+			"--no-session-persistence",
+		)
+	}
+	return r.generateCodexText(ctx, prompt)
+}
+
+func (r Runner) generateCodexText(ctx context.Context, prompt string) (string, error) {
 	outFile, err := os.CreateTemp("", "gitm8-commit-message-*")
 	if err != nil {
 		return "", err

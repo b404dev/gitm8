@@ -8,6 +8,6 @@ export GITM8_CONFIRM_DESTRUCTIVE_ACTIONS="true"
 export GITM8_FETCH_ON_STARTUP="false"
 export GITM8_SHOW_COMMIT_GRAPH="true"
 
-# AI provider used by ctrl+g in the commit prompt.
+# AI provider used by ctrl+g in the commit prompt and PR creation.
 # Supported values: codex, claude
-export GITM8_COMMIT_MESSAGE_PROVIDER="codex"
+export GITM8_AI_PROVIDER="codex"
