@@ -20,6 +20,14 @@ func (m Model) pullRequestAction() (tea.Model, tea.Cmd) {
 	})
 }
 
+// manualPullRequestAction hands the terminal to gh so the user can write the PR.
+func (m Model) manualPullRequestAction() (tea.Model, tea.Cmd) {
+	m.err = nil
+	m.notice = ""
+	m.gitOutput = "Opening gh pr create..."
+	return m, openManualPullRequest(m.runner.Dir, m.config.DefaultBranch)
+}
+
 // syncAction starts pull --rebase followed by push through the Git runner.
 func (m Model) syncAction() (tea.Model, tea.Cmd) {
 	m.err = nil
@@ -90,6 +98,28 @@ func runGenerateCommitMessage(fn func(context.Context) (string, error)) tea.Cmd 
 			return commitMessageGeneratedMsg{err: fmt.Errorf("Codex returned an empty commit message")}
 		}
 		return commitMessageGeneratedMsg{message: message}
+	}
+}
+
+func openManualPullRequest(dir string, baseBranch string) tea.Cmd {
+	return func() tea.Msg {
+		if strings.TrimSpace(baseBranch) == "" {
+			baseBranch = "main"
+		}
+		path, err := exec.LookPath("gh")
+		if err != nil {
+			return gitActionFinishedMsg{err: fmt.Errorf("gh CLI is required for pull requests")}
+		}
+		cmd := exec.Command(path, "pr", "create", "--base", baseBranch)
+		if dir != "" {
+			cmd.Dir = dir
+		}
+		return tea.ExecProcess(cmd, func(err error) tea.Msg {
+			if err != nil {
+				return gitActionFinishedMsg{err: err}
+			}
+			return gitActionFinishedMsg{output: "Returned from gh pr create", refresh: true}
+		})()
 	}
 }
 

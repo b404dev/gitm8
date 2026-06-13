@@ -87,12 +87,14 @@ Open the branch switcher.
 View recent commit logs.
 .TP
 .B r, Ctrl-p
-Create or show a pull request for the current branch using
+Open pull request options for the current branch using
 .BR gh (1) .
-When creating a new pull request,
-.B gitm8
-asks the configured AI provider to draft the title and body from the branch diff
-against the configured default branch.
+Choose
+.B g
+to generate a title and body with the configured AI provider, or
+.B m
+to write the pull request yourself in
+.BR "gh pr create" .
 .TP
 .B R, Ctrl-r
 Open the rebase picker.

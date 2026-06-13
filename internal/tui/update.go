@@ -83,6 +83,9 @@ func (m Model) updateFocusedMode(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "profiles":
 		next, cmd := m.updateProfiles(msg)
 		return next, cmd, true
+	case "pull-request":
+		next, cmd := m.updatePullRequest(msg)
+		return next, cmd, true
 	case "help":
 		next, cmd := m.updateHelp(msg)
 		return next, cmd, true
@@ -106,7 +109,12 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "x":
 		return m.syncAction()
 	case "r", "ctrl+p":
-		return m.pullRequestAction()
+		m.mode = "pull-request"
+		m.notice = ""
+		m.err = nil
+		m.review.SetContent(m.pullRequestView())
+		m.review.GotoTop()
+		return m, nil
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "R", "ctrl+r":
@@ -578,6 +586,25 @@ func (m Model) updateProfiles(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		return m.applySelectedProfile()
+	}
+	return m, nil
+}
+
+// updatePullRequest lets the user choose manual or generated PR creation.
+func (m Model) updatePullRequest(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.mode = "review"
+		m.notice = "Pull request cancelled"
+		return m, loadReview(m.runner, m.selectedPath())
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "g":
+		m.mode = "review"
+		return m.pullRequestAction()
+	case "m":
+		m.mode = "review"
+		return m.manualPullRequestAction()
 	}
 	return m, nil
 }

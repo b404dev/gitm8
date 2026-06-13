@@ -177,9 +177,27 @@ Files to read:
 key: r
   -> update.go: updateKey()
   -> update.go: updateDashboardKey()
+  -> pull request options view
+```
+
+Then pressing `g` in the pull request options:
+
+```text
+key: g
   -> actions.go: pullRequestAction()
   -> git.Runner.PullRequestOutput()
   -> gh pr view, or generate title/body and gh pr create
+  -> gitActionFinishedMsg
+  -> handleGitActionFinished()
+  -> View()
+```
+
+Then pressing `m` in the pull request options:
+
+```text
+key: m
+  -> actions.go: manualPullRequestAction()
+  -> gh pr create
   -> gitActionFinishedMsg
   -> handleGitActionFinished()
   -> View()

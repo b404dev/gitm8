@@ -257,6 +257,8 @@ func viewerTitle(mode string) string {
 		return "Commit Logs"
 	case "profiles":
 		return "Switch Identity"
+	case "pull-request":
+		return "Pull Request"
 	case "help":
 		return "Help"
 	case "new-branch":
@@ -359,6 +361,15 @@ func (m Model) profilesView() string {
 	return b.String()
 }
 
+// pullRequestView renders the PR creation choice.
+func (m Model) pullRequestView() string {
+	provider := m.config.AIProvider
+	if provider == "" {
+		provider = "codex"
+	}
+	return fmt.Sprintf("Create a pull request for the current branch.\n\n  g  generate title and description with %s\n  m  write it yourself with gh pr create\n\n  esc  cancel\n", provider)
+}
+
 // Help View
 
 // helpView renders the in-app reference for keys, config, profiles, and docs.
@@ -382,7 +393,7 @@ func (m Model) helpView() string {
 		{"W", "in branch switcher: switch and bring current changes"},
 		{"l", "view recent commit logs"},
 		{"i", "identity switcher (git user profiles)"},
-		{"r / ctrl+p", "create or show pull request for current branch"},
+		{"r / ctrl+p", "pull request options"},
 		{"R / ctrl+r", "rebase the current branch onto another"},
 		{"h", "this help"},
 		{"o", "expand or collapse the git output box"},

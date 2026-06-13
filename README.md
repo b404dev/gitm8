@@ -136,7 +136,7 @@ mode.
 | `x` | Sync: pull with rebase, then push |
 | `b` | Open branch switcher |
 | `l` | View recent commit logs |
-| `r` / `ctrl+p` | Create or show a pull request for the current branch |
+| `r` / `ctrl+p` | Open pull request options |
 | `R` / `ctrl+r` | Rebase current branch onto another branch |
 | `i` | Switch Git identity profile |
 | `h` | Open help |
@@ -187,18 +187,18 @@ git rebase --abort
 
 ### Pull Requests
 
-Press `r` or `ctrl+p` in the dashboard to create or show a pull request for the
+Press `r` or `ctrl+p` in the dashboard to open pull request options for the
 current branch. This workflow uses the GitHub CLI (`gh`):
 
 ```sh
 gh auth login
 ```
 
-`gitm8` first tries to show an existing PR for the current branch. If none
-exists, it asks the configured AI provider to draft a title and description from
-the branch diff against the configured default branch, then runs `gh pr create`.
-If `gh` needs authentication, a pushed branch, or more information, the error
-appears in the git output box.
+Choose `g` to generate a title and description from the branch diff against the
+configured default branch, then create the PR. Choose `m` to write the PR
+yourself in `gh pr create`. The generated path first tries to show an existing
+PR for the current branch to avoid duplicates. If `gh` needs authentication, a
+pushed branch, or more information, the error appears in the git output box.
 
 ### Git Identities
 
