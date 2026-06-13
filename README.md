@@ -1,3 +1,5 @@
+<img width="1080" height="702" alt="image" src="https://github.com/user-attachments/assets/6e850550-bf17-416f-b0a1-218ba03ab388" />
+
 # gitm8
 
 `gitm8` is a small terminal UI for common Git workflows. It uses the installed
