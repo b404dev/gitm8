@@ -107,6 +107,7 @@ Guidelines:
 - Use imperative mood, like "Add", "Fix", "Update", or "Remove".
 - Keep it under 72 characters.
 - Return only one subject line.
+- Do not use em dashes.
 - Do not include quotes, markdown, bullets, explanations, or alternatives.
 
 STAGED DIFF:

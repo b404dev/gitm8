@@ -89,6 +89,7 @@ Guidelines:
 - Describe the user-visible or developer-visible change, not the file list.
 - Keep the title concise and practical.
 - Use a short markdown body with a Summary section.
+- Do not use em dashes.
 - Return only valid JSON with this shape:
 {"title":"one-line title","body":"markdown body"}
 
