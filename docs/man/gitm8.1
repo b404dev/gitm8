@@ -8,7 +8,7 @@ gitm8 \- terminal dashboard for common Git workflows
 .B gitm8
 is a small terminal user interface for day-to-day Git work.
 It opens an interactive dashboard for reviewing changes, staging and unstaging
-files, committing, fetching, pulling, pushing, syncing, switching branches,
+files, committing, fetching, pulling, pushing, switching branches,
 rebasing, viewing logs, opening pull requests, and switching repository-local
 Git identity profiles.
 .PP
@@ -43,20 +43,54 @@ Press
 to show the repository-wide review.
 File previews include lightweight theme-aware syntax highlighting for common
 source and configuration file types.
+Press
+.B /
+while viewing file contents to search and highlight matches in place, then use
+.B Up
+and
+.B Down
+to move between matches.
+The output bar shows the search input, match count, and search keys while the
+viewer keeps file context.
+Plain searches match full words; use
+.B *
+or
+.B ?
+wildcards to match partial words.
+The changed-files panel marks removed tracked paths with
+.B DEL
+and renames with
+.BR REN ,
+displayed as
+.BR "old/path -> new/path" .
 .SS Keys
 .TP
 .B Up, Down
 Move the file, branch, profile, or picker selection.
 .TP
 .B Enter
-Preview the selected file, accept the selected picker item, or confirm an
-active text input.
+Open the viewed file in the configured editor, accept the selected picker item,
+or confirm an active text input.
 .TP
 .B 0
 Show repository-wide review.
 .TP
 .B d
 Toggle the selected file between diff and content preview.
+.TP
+.B /
+Search and highlight inside the viewed file contents.
+.TP
+.B x
+Discard all changes to the selected file.
+This uses
+.BR "git restore"
+for tracked changes and
+.BR "git clean -fd"
+for untracked files.
+When
+.B GITM8_CONFIRM_DESTRUCTIVE_ACTIONS
+is enabled, confirmation is required first.
 .TP
 .B s, S
 Stage the selected file, or stage all changes.
@@ -66,25 +100,64 @@ Unstage the selected file, or unstage all changes.
 .TP
 .B c
 Commit staged changes.
+Inside the commit prompt,
+.B Ctrl-g
+asks the configured AI CLI to generate a commit message from staged changes and
+populate the input.
+This shortcut is hidden when the configured AI provider is not installed.
 .TP
 .B f
 Fetch all remotes and prune stale remote-tracking refs.
 .TP
 .B p, P
 Pull with fast-forward only mode, or push.
+When the current branch has no upstream,
+.B P
+uses
+.BR "git push -u <remote> <branch>"
+when a remote is configured.
 .TP
-.B x
-Sync by pulling with rebase, then pushing.
+.B z
+Open the in-TUI squash picker for commits on this branch since the merge-base
+with
+.BR GITM8_DEFAULT_BRANCH .
+Use
+.B S
+to mark the highlighted commit for squashing,
+.B K
+to keep it separate, and
+.B B
+to choose the highlighted commit as the base.
+Pick a base after marking the commits you want to squash, then press enter to
+apply.
+It applies the squash without opening an external editor.
+This rewrites local branch history, refuses detached branches, the default
+branch, and dirty worktrees, and does not push.
 .TP
 .B b
 Open the branch switcher.
+.TP
+.B C
+Open conflict mode for unmerged files.
+.TP
+.B t
+Open the stash panel.
 .TP
 .B l
 View recent commit logs.
 .TP
 .B r, Ctrl-p
-Create or show a pull request for the current branch using
+Open pull request options for the current branch using
 .BR gh (1) .
+Choose
+.B g
+to generate a title and body with the configured AI provider when it is
+installed, or
+.B m
+to write the pull request yourself in
+.BR "gh pr create" .
+.B gitm8
+does not push while creating a pull request; push the branch first.
 .TP
 .B R, Ctrl-r
 Open the rebase picker.
@@ -156,12 +229,69 @@ If the rebase stops on conflicts, resolve them with normal Git commands outside
 .BR gitm8 ,
 then continue from the dashboard or by running
 .BR "git rebase --continue" .
+.SH CONFLICTS
+Conflict mode lists files Git reports as unmerged.
+Use
+.B Up
+and
+.B Down
+to choose a file,
+.B Enter
+to open it in the configured editor, and
+.B m
+to stage it after resolving conflicts.
+The selected file preview shows line numbers for
+.BR "<<<<<<<" ,
+.BR "=======" ,
+and
+.BR ">>>>>>>"
+conflict markers.
+The same screen supports
+.B c
+to continue a rebase,
+.B a
+to abort, and
+.B s
+to skip the current patch.
+.SH STASHES
+The stash panel lists
+.BR "git stash list"
+entries and previews the selected stash diff.
+Use
+.B n
+to stash current tracked and untracked changes,
+.B a
+to apply,
+.B p
+to pop, and
+.B D
+to drop the selected stash.
 .SH CONFIGURATION
 Configuration is loaded from
+.IR ~/.gitm8/.gitm8rc ,
+then
+.IR ~/.gitm8/gitm8rc ,
+then legacy
 .IR ~/.gitm8rc ,
 then
 .IR ~/.gitm8/credentials .
 Environment variables override defaults.
+.B gitm8
+creates
+.IR ~/.gitm8/
+and a default
+.IR ~/.gitm8/.gitm8rc
+when no config file exists.
+Existing config files are not replaced.
+For first-run config generation,
+.B gitm8
+uses
+.B codex
+when installed, falls back to
+.B claude
+when only Claude is installed, and otherwise writes an AI unavailable comment.
+Existing configs keep their selected provider; generated AI actions are disabled
+when that provider is not installed.
 .TP
 .B GITM8_DEFAULT_BRANCH
 Default branch name.
@@ -186,6 +316,61 @@ Fetch from all remotes with pruning before the dashboard opens.
 .TP
 .B GITM8_SHOW_COMMIT_GRAPH
 Show graph lines in the commit log view.
+.TP
+.B GITM8_AI_PROVIDER
+AI CLI used for generated commit messages and pull request text.
+Supported values:
+.B codex
+,
+.B claude
+and
+.BR ollama .
+The first-run default is
+.B codex
+when installed,
+.B claude
+when Codex is missing and Claude is installed, otherwise
+.BR codex
+with AI marked unavailable.
+.TP
+.B GITM8_OLLAMA_URL
+Ollama API base URL used when
+.B GITM8_AI_PROVIDER
+is
+.BR ollama .
+Default:
+.BR http://localhost:11434 .
+.TP
+.B GITM8_LOG_ENABLED
+Enable syslog-style file logging.
+Default:
+.BR true .
+.TP
+.B GITM8_LOG_LEVEL
+Minimum log level.
+Supported values:
+.B DEBUG ,
+.B INFO ,
+.B WARN ,
+and
+.BR ERROR .
+Default:
+.BR INFO .
+.TP
+.B GITM8_LOG_FILE
+Path for application logs.
+Default:
+.IR ~/.gitm8/gitm8.log .
+The
+.B ~/
+and
+.B $HOME/
+prefixes are expanded.
+When the active log reaches 100 MB,
+.B gitm8
+compresses it and keeps up to five
+.B .gz
+backups beside the active log.
 .SH THEMES
 Built-in themes:
 .PP
@@ -239,6 +424,25 @@ Authenticate with
 .B gh auth login
 before using the dashboard pull-request key.
 .TP
+.BR codex (1)
+Optional. Preferred first-run AI provider for generated commit messages and pull
+request text.
+.TP
+.BR claude (1)
+Optional. Used when selected automatically on first run or when
+.B GITM8_AI_PROVIDER
+is set to
+.BR claude .
+.TP
+.BR ollama (1)
+Optional. Local AI provider for generated commit messages and pull request text
+when
+.B GITM8_AI_PROVIDER
+is set to
+.BR ollama .
+Requires an Ollama server reachable through
+.BR GITM8_OLLAMA_URL .
+.TP
 .BR yazi (1)
 Optional. Used only when pressing
 .B y
@@ -268,6 +472,9 @@ GITM8_THEME=catppuccin gitm8
 .SH SEE ALSO
 .BR git (1),
 .BR gh (1),
+.BR codex (1),
+.BR claude (1),
+.BR ollama (1),
 .BR yazi (1)
 .SH BUGS
 Report issues at

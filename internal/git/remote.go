@@ -5,6 +5,28 @@ import (
 	"strings"
 )
 
+// PushRejectedNonFastForward reports whether a failed push was refused because
+// the branch is not a fast-forward of its remote — the situation after a
+// squash or rebase rewrites history, where a --force-with-lease push is needed.
+func PushRejectedNonFastForward(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"non-fast-forward",
+		"updates were rejected",
+		"failed to push some refs",
+		"fetch first",
+		"tip of your current branch is behind",
+	} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // repoWebURL turns the default remote into a web URL when possible.
 func (r Runner) repoWebURL(ctx context.Context) string {
 	remote := r.defaultRemote(ctx)

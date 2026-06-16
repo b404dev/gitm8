@@ -1,6 +1,8 @@
 package git
 
-import "context"
+import (
+	"context"
+)
 
 // Rebase starts a rebase onto the selected target branch.
 func (r Runner) Rebase(ctx context.Context, target string) error {

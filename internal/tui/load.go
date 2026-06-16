@@ -114,6 +114,73 @@ func loadRebase(runner git.Runner) tea.Cmd {
 	return loadBranchList(runner, "rebase")
 }
 
+// loadConflicts loads unmerged files and previews the selected conflict file.
+func loadConflicts(runner git.Runner, cursor int) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		info, infoErr := runner.RepoInfo(ctx)
+		files, filesErr := runner.FileStatuses(ctx)
+		conflicts, conflictsErr := runner.ConflictFiles(ctx)
+
+		review := "No conflict files found.\n"
+		markerReport := ""
+		var previewErr error
+		if len(conflicts) > 0 {
+			cursor = clamp(cursor, 0, len(conflicts)-1)
+			markerReport = runner.ConflictMarkerReport(conflicts[cursor])
+			review, previewErr = runner.Preview(ctx, conflicts[cursor])
+		}
+		return conflictsLoadedMsg{
+			info:         info,
+			files:        files,
+			conflicts:    conflicts,
+			markerReport: markerReport,
+			review:       review,
+			err:          firstErr(infoErr, filesErr, conflictsErr, previewErr),
+		}
+	}
+}
+
+// loadStashes loads the stash stack and previews the selected stash diff.
+func loadStashes(runner git.Runner, cursor int) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		info, infoErr := runner.RepoInfo(ctx)
+		files, filesErr := runner.FileStatuses(ctx)
+		stashes, stashesErr := runner.Stashes(ctx)
+
+		review := "No stashes found.\n"
+		var diffErr error
+		if len(stashes) > 0 {
+			cursor = clamp(cursor, 0, len(stashes)-1)
+			review, diffErr = runner.StashDiff(ctx, stashes[cursor].Ref)
+		}
+		return stashesLoadedMsg{
+			info:    info,
+			files:   files,
+			stashes: stashes,
+			review:  review,
+			err:     firstErr(infoErr, filesErr, stashesErr, diffErr),
+		}
+	}
+}
+
+// loadSquash loads the commits ahead of the default branch for the squash picker.
+func loadSquash(runner git.Runner, base string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		info, infoErr := runner.RepoInfo(ctx)
+		files, filesErr := runner.FileStatuses(ctx)
+		commits, commitsErr := runner.SquashCandidates(ctx, base)
+		return squashLoadedMsg{
+			info:    info,
+			files:   files,
+			commits: commits,
+			err:     firstErr(infoErr, filesErr, commitsErr),
+		}
+	}
+}
+
 // loadBranchList does the shared branch-loading work for switch and rebase screens.
 func loadBranchList(runner git.Runner, mode string) tea.Cmd {
 	return func() tea.Msg {
@@ -138,6 +205,15 @@ func loadCurrent(runner git.Runner, path string, mode string, graph bool) tea.Cm
 	}
 	if mode == "rebase" {
 		return loadRebase(runner)
+	}
+	if mode == "conflicts" {
+		return loadConflicts(runner, 0)
+	}
+	if mode == "stashes" {
+		return loadStashes(runner, 0)
+	}
+	if mode == "squash" {
+		return loadReview(runner, path)
 	}
 	if mode == "logs" {
 		return loadLog(runner, graph)

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -9,10 +10,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/b404dev/gitm8/internal/config"
 	"github.com/b404dev/gitm8/internal/git"
 )
 
-// TestVisibleOutputLinesWrapsLongLines checks long Git output wraps cleanly.
+// TestVisibleOutputLinesWrapsLongLines checks long Git output wraps cleanly
 func TestVisibleOutputLinesWrapsLongLines(t *testing.T) {
 	got, hidden := visibleOutputLines("alpha beta gamma", 8, 10)
 	want := []string{"alpha", "beta", "gamma"}
@@ -78,12 +80,190 @@ func TestBranchesViewShowsSwitchWithChangesKey(t *testing.T) {
 	}
 }
 
+func TestStageNoticeNamesDeletedPaths(t *testing.T) {
+	file := git.FileStatus{Path: "old.txt", Worktree: 'D'}
+	if got := stageNotice(file); got != "Staged removal of old.txt" {
+		t.Fatalf("stageNotice() = %q, want deletion-specific text", got)
+	}
+}
+
+// TestHandleCommitMessageGeneratedPopulatesInput checks generated text stays in
+// the commit prompt instead of replacing the review panel.
+func TestHandleCommitMessageGeneratedPopulatesInput(t *testing.T) {
+	m := New(git.Runner{}, config.Config{Theme: "default"})
+	m.loading = true
+	m.mode = "commit"
+
+	got := m.handleCommitMessageGenerated(commitMessageGeneratedMsg{message: "Update commit flow"})
+	if got.loading {
+		t.Fatal("loading = true, want false")
+	}
+	if got.mode != "commit" {
+		t.Fatalf("mode = %q, want commit", got.mode)
+	}
+	if got.commit.Value() != "Update commit flow" {
+		t.Fatalf("commit value = %q, want generated message", got.commit.Value())
+	}
+}
+
+// TestPullRequestViewShowsAIUnavailable keeps manual PR creation available.
+func TestPullRequestViewShowsAIUnavailable(t *testing.T) {
+	m := Model{config: config.Config{AIProvider: "codex", AIAvailable: false, AIUnavailableReason: "codex is not installed or not on PATH"}}
+
+	got := m.pullRequestView()
+	if !strings.Contains(got, "AI generation unavailable: codex is not installed or not on PATH") {
+		t.Fatalf("pullRequestView() = %q, want unavailable reason", got)
+	}
+	if strings.Contains(got, "g  generate") {
+		t.Fatalf("pullRequestView() = %q, should not offer generated PR text", got)
+	}
+	if !strings.Contains(got, "m  write it yourself") {
+		t.Fatalf("pullRequestView() = %q, want manual PR option", got)
+	}
+}
+
+// TestCommitPromptHelpHidesGenerateWhenAIUnavailable avoids advertising ctrl+g.
+func TestCommitPromptHelpHidesGenerateWhenAIUnavailable(t *testing.T) {
+	m := Model{config: config.Config{AIAvailable: false}}
+	if got := m.commitPromptHelp(); strings.Contains(got, "ctrl+g") {
+		t.Fatalf("commitPromptHelp() = %q, should not advertise AI generate", got)
+	}
+
+	m.config.AIAvailable = true
+	if got := m.commitPromptHelp(); !strings.Contains(got, "ctrl+g") {
+		t.Fatalf("commitPromptHelp() = %q, want AI generate hint", got)
+	}
+}
+
+// TestHelpViewIncludesSquashKey documents the dashboard squash workflow.
+func TestHelpViewIncludesSquashKey(t *testing.T) {
+	m := Model{config: config.Config{AIAvailable: true}}
+	got := m.helpView()
+	if !strings.Contains(got, "mark commits, choose a base") {
+		t.Fatalf("helpView() = %q, want squash key help", got)
+	}
+}
+
+// TestHelpViewIncludesDiscardKey documents the guarded discard workflow.
+func TestHelpViewIncludesDiscardKey(t *testing.T) {
+	m := Model{}
+	got := m.helpView()
+	if !strings.Contains(got, "discard all changes to selected file") {
+		t.Fatalf("helpView() = %q, want discard key help", got)
+	}
+}
+
+func TestHelpViewIncludesFindKey(t *testing.T) {
+	m := Model{}
+	got := m.helpView()
+	if !strings.Contains(got, "search and highlight inside the viewed file contents") {
+		t.Fatalf("helpView() = %q, want find key help", got)
+	}
+}
+
+func TestSearchLinesRequireFullWordByDefault(t *testing.T) {
+	content := "main.go\n\n  1  package main\n  2  func renderSearchView() string\n  3  render nil\n"
+	got := fuzzySearchLines(content, "render", 10)
+	if len(got) == 0 {
+		t.Fatal("fuzzySearchLines() returned no matches")
+	}
+	if got[0].LineNo != 3 {
+		t.Fatalf("first match = %#v, want full-word line 3", got[0])
+	}
+	if len(got) != 1 {
+		t.Fatalf("matches = %#v, want only full-word render", got)
+	}
+}
+
+func TestSearchLinesSupportWildcardWords(t *testing.T) {
+	content := "  1  fuzzy searching\n  2  find selected zebra\n"
+	got := fuzzySearchLines(content, "search*", 10)
+	if len(got) == 0 {
+		t.Fatal("fuzzySearchLines() returned no matches")
+	}
+	if got[0].LineNo != 1 {
+		t.Fatalf("first match line = %d, want substring line 1", got[0].LineNo)
+	}
+}
+
+func TestSearchOutputBarShowsInputAndKeys(t *testing.T) {
+	m := New(git.Runner{}, config.Config{Theme: "default"})
+	m.width = 100
+	m.mode = "search"
+	m.searchInput.SetValue("render*")
+	m.searchMatches = []searchMatch{{LineNo: 2}}
+
+	got := m.outputBar()
+	if !strings.Contains(got, "/ render*") || !strings.Contains(got, "1/1 matches") || !strings.Contains(got, "↑ prev") || !strings.Contains(got, "↓ next") {
+		t.Fatalf("outputBar() = %q, want search input, summary, and keys", got)
+	}
+}
+
+func TestSearchViewKeepsFileContextAndHighlightsMatch(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme("default")
+	m := New(git.Runner{}, config.Config{Theme: "default"})
+	m.target = "main.go"
+	m.viewerContent = "main.go\n\n  1  package main\n  2  func renderSearchView() string\n  3  return nil\n"
+	m.searchInput.SetValue("render*")
+	m.refreshSearchResults()
+
+	got := m.searchView()
+	if strings.Contains(got, "/ render*") {
+		t.Fatalf("searchView() = %q, should not include search prompt", got)
+	}
+	if !strings.Contains(got, "package main") || !strings.Contains(got, "return nil") {
+		t.Fatalf("searchView() = %q, want surrounding file context", got)
+	}
+	if !strings.Contains(got, "\x1b[") {
+		t.Fatalf("searchView() = %q, want ANSI highlighting", got)
+	}
+}
+
+// TestEditorCommandUsesShellForEditorWithArgs keeps configured editor commands usable.
+func TestEditorCommandUsesShellForEditorWithArgs(t *testing.T) {
+	cmd, err := editorCommand("code --wait", "main.go")
+	if err != nil {
+		t.Fatalf("editorCommand() error = %v", err)
+	}
+	if runtime.GOOS == "windows" {
+		if len(cmd.Args) < 4 || cmd.Args[0] != "cmd" || cmd.Args[1] != "/C" {
+			t.Fatalf("editorCommand args = %#v, want cmd command", cmd.Args)
+		}
+		return
+	}
+	if len(cmd.Args) < 4 || cmd.Args[0] != "sh" || cmd.Args[1] != "-c" {
+		t.Fatalf("editorCommand args = %#v, want shell command", cmd.Args)
+	}
+	if cmd.Args[len(cmd.Args)-1] != "main.go" {
+		t.Fatalf("editorCommand file arg = %q, want main.go", cmd.Args[len(cmd.Args)-1])
+	}
+}
+
 // TestRebaseViewShowsLocalRebaseControls checks rebase help lists continue/abort/skip.
 func TestRebaseViewShowsLocalRebaseControls(t *testing.T) {
 	m := Model{height: 24, branches: []string{"main", "feature"}, info: git.RepoInfo{Branch: "feature"}}
 	got := m.rebaseView()
 	if !strings.Contains(got, "c continue") || !strings.Contains(got, "a abort") || !strings.Contains(got, "s skip") {
 		t.Fatalf("rebaseView() = %q, want local rebase controls", got)
+	}
+}
+
+// TestConflictsViewShowsResolveControls checks conflict mode documents its actions.
+func TestConflictsViewShowsResolveControls(t *testing.T) {
+	m := Model{height: 24, conflicts: []string{"main.go"}}
+	got := m.conflictsView("Conflict markers:\n3: <<<<<<< HEAD\n", "main.go\n\n1  <<<<<<< HEAD\n")
+	if !strings.Contains(got, "m to mark resolved") || !strings.Contains(got, "enter opens the file") || !strings.Contains(got, "3: <<<<<<< HEAD") {
+		t.Fatalf("conflictsView() = %q, want conflict controls and file", got)
+	}
+}
+
+// TestStashesViewShowsStashActions checks stash mode documents its actions.
+func TestStashesViewShowsStashActions(t *testing.T) {
+	m := Model{height: 24, stashes: []git.Stash{{Ref: "stash@{0}", Subject: "WIP on main"}}}
+	got := m.stashesView("diff --git a/main.go b/main.go\n")
+	if !strings.Contains(got, "a apply") || !strings.Contains(got, "p pop") || !strings.Contains(got, "D drop") {
+		t.Fatalf("stashesView() = %q, want stash controls", got)
 	}
 }
 

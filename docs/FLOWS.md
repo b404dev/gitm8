@@ -58,10 +58,11 @@ Model.Init()
 key: s
   -> update.go: updateKey()
   -> update.go: updateDashboardKey()
-  -> selectedPath()
+  -> selectedFile()
+  -> FileStatus.GitPaths()
   -> action(...)
   -> git.Runner.StageOutput()
-  -> git add -- <path>
+  -> git add -- <path...>
   -> gitActionFinishedMsg
   -> handleGitActionFinished()
   -> loadCurrent()
@@ -78,29 +79,9 @@ Files to read:
 - [`internal/tui/load.go`](../internal/tui/load.go)
 - [`internal/tui/view.go`](../internal/tui/view.go)
 
-## Press `x` To Sync
-
-```text
-key: x
-  -> update.go: updateKey()
-  -> update.go: updateDashboardKey()
-  -> actions.go: syncAction()
-  -> action(...)
-  -> git.Runner.SyncOutput()
-  -> git pull --rebase
-  -> git push
-  -> gitActionFinishedMsg
-  -> handleGitActionFinished()
-  -> loadCurrent()
-  -> View()
-```
-
-Files to read:
-
-- [`internal/tui/update.go`](../internal/tui/update.go)
-- [`internal/tui/actions.go`](../internal/tui/actions.go)
-- [`internal/git/sync.go`](../internal/git/sync.go)
-- [`internal/git/commands.go`](../internal/git/commands.go)
+`FileStatus.GitPaths()` matters for renames because Git needs both old and new
+paths for some operations. The UI still shows `DisplayPath()` so users see
+`old/path -> new/path`.
 
 ## Press `b` To Switch Branches
 
@@ -177,9 +158,28 @@ Files to read:
 key: r
   -> update.go: updateKey()
   -> update.go: updateDashboardKey()
+  -> pull request options view
+```
+
+Then pressing `g` in the pull request options:
+
+```text
+key: g
   -> actions.go: pullRequestAction()
   -> git.Runner.PullRequestOutput()
-  -> gh pr view or gh pr create --fill
+  -> require current branch to already be pushed
+  -> gh pr view, or generate title/body and gh pr create
+  -> gitActionFinishedMsg
+  -> handleGitActionFinished()
+  -> View()
+```
+
+Then pressing `m` in the pull request options:
+
+```text
+key: m
+  -> actions.go: manualPullRequestAction()
+  -> gh pr create
   -> gitActionFinishedMsg
   -> handleGitActionFinished()
   -> View()

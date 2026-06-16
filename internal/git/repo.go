@@ -50,37 +50,49 @@ func (r Runner) RepoInfo(ctx context.Context) (RepoInfo, error) {
 
 // FileStatuses reads `git status --porcelain` and turns it into file rows.
 func (r Runner) FileStatuses(ctx context.Context) ([]FileStatus, error) {
-	out, err := r.output(ctx, "status", "--porcelain", "-uall")
+	out, err := r.output(ctx, "status", "--porcelain=v1", "-z", "-uall")
 	if err != nil {
 		return nil, err
 	}
 
-	var files []FileStatus
-	for _, line := range strings.Split(out, "\n") {
-		// Porcelain status is column-based: leading spaces are meaningful.
-		line = strings.TrimRight(line, "\r\n")
-		if status, ok := parseStatusLine(line); ok {
-			files = append(files, status)
-		}
-	}
-	return files, nil
+	return parseStatusZ(out), nil
 }
 
-// parseStatusLine reads one `git status --porcelain` line in "XY PATH" form.
-func parseStatusLine(line string) (FileStatus, bool) {
-	if len(line) < 4 {
+func parseStatusZ(out string) []FileStatus {
+	var files []FileStatus
+	records := strings.Split(out, "\x00")
+	for i := 0; i < len(records); i++ {
+		record := records[i]
+		if record == "" {
+			continue
+		}
+		status, ok := parseStatusRecord(record)
+		if !ok {
+			continue
+		}
+		if status.Index == 'R' || status.Index == 'C' {
+			if i+1 < len(records) {
+				status.OldPath = records[i+1]
+				i++
+			}
+		}
+		files = append(files, status)
+	}
+	return files
+}
+
+// parseStatusRecord reads one NUL-delimited `git status --porcelain=v1 -z`
+// record in "XY PATH" form. Rename records carry the old path in the next
+// NUL-delimited record and are completed by parseStatusZ.
+func parseStatusRecord(record string) (FileStatus, bool) {
+	if len(record) < 4 {
 		return FileStatus{}, false
 	}
 
-	path := strings.TrimSpace(line[3:])
-	if strings.Contains(path, " -> ") {
-		parts := strings.Split(path, " -> ")
-		path = parts[len(parts)-1]
-	}
 	return FileStatus{
-		Path:     path,
-		Index:    line[0],
-		Worktree: line[1],
+		Path:     record[3:],
+		Index:    record[0],
+		Worktree: record[1],
 	}, true
 }
 

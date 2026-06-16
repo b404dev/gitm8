@@ -33,12 +33,14 @@ It answers questions like:
 - Should gitm8 fetch on startup?
 - Should commit logs show graph lines?
 - Which Git identity profiles are available?
+- Which AI provider/model should generate commit and PR text?
 
 Important functions:
 
 - `config.Load()`: builds the final config.
 - `defaults()`: sets fallback values.
-- `loadFile()`: reads `~/.gitm8rc` and `~/.gitm8/credentials`.
+- `loadFile()`: reads `~/.gitm8/.gitm8rc`, `~/.gitm8/gitm8rc`, legacy
+  `~/.gitm8rc`, and `~/.gitm8/credentials`.
 - `applyEnv()`: applies `GITM8_*` environment variables.
 - `loadProfiles()`: reads `~/.gitm8/profiles`.
 
@@ -70,7 +72,6 @@ Examples:
 
 ```text
 m.runner.StageOutput(ctx, path)
-m.runner.SyncOutput(ctx)
 m.runner.Branches(ctx)
 ```
 
@@ -84,7 +85,8 @@ Defined in [`internal/git/git.go`](../internal/git/git.go).
 
 Fields:
 
-- `Path`: file path.
+- `Path`: file path Git should operate on, or the new path for a rename.
+- `OldPath`: old path for a rename or copy, otherwise empty.
 - `Index`: staged status column from Git.
 - `Worktree`: unstaged status column from Git.
 
@@ -93,6 +95,10 @@ Helpers:
 - `Staged()`: true when the file has staged changes.
 - `Unstaged()`: true when the file has unstaged or untracked changes.
 - `Label()`: returns Git's short status label, such as `M ` or `??`.
+- `DisplayPath()`: returns the user-facing label, including `old -> new` for renames.
+- `GitPaths()`: returns the path arguments Git commands need for the row.
+- `Deleted()`: true for removed tracked paths.
+- `Renamed()`: true for rename/copy rows.
 
 The TUI uses this for the changed-files panel.
 
@@ -153,10 +159,13 @@ Common modes:
 - `logs`: commit log view.
 - `branches`: branch picker.
 - `rebase`: rebase target picker.
+- `conflicts`: unmerged-file picker with resolve/rebase actions.
+- `stashes`: stash picker with apply/pop/drop actions.
 - `profiles`: Git identity picker.
 - `commit`: commit message input.
 - `new-branch`: new branch name input.
 - `delete-branch`: branch delete prompt.
+- `discard-file`: file discard confirmation prompt.
 - `help`: help screen.
 
 Keys first go through `updateKey()` in [`internal/tui/update.go`](../internal/tui/update.go).

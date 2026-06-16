@@ -45,7 +45,6 @@ commands itself. It should call methods like:
 
 ```text
 runner.StageOutput(...)
-runner.SyncOutput(...)
 runner.Branches(...)
 ```
 
@@ -115,14 +114,15 @@ The config layer reads user settings and keeps them separate from UI state:
 Read this layer when changing:
 
 - environment variables such as `GITM8_THEME`
-- `~/.gitm8rc` or `~/.gitm8/credentials` parsing
+- `~/.gitm8/.gitm8rc`, `~/.gitm8/gitm8rc`, legacy `~/.gitm8rc`, or
+  `~/.gitm8/credentials` parsing
 - profile parsing from `~/.gitm8/profiles`
 - default behavior such as fetch-on-startup or commit graph display
 
 ### Git Layer
 
 The Git layer is the only place that should run `git` or `gh`. The UI asks for
-things like "stage this file" or "sync this branch"; this package decides the
+things like "stage this file" or "rebase this branch"; this package decides the
 exact command to run.
 
 - Core types: [`internal/git/git.go`](../internal/git/git.go)
@@ -134,7 +134,6 @@ exact command to run.
 - File previews: [`internal/git/preview.go`](../internal/git/preview.go)
 - Commit logs: [`internal/git/log.go`](../internal/git/log.go)
 - Pull requests via `gh`: [`internal/git/pr.go`](../internal/git/pr.go)
-- Sync workflow: [`internal/git/sync.go`](../internal/git/sync.go)
 - Rebase commands: [`internal/git/rebase.go`](../internal/git/rebase.go)
 - Remote URL helpers: [`internal/git/remote.go`](../internal/git/remote.go)
 - Text formatting helpers: [`internal/git/text.go`](../internal/git/text.go)
@@ -227,7 +226,7 @@ When user-visible behavior changes, update the README and man page together.
 
 When the names feel unclear, read [`docs/ABSTRACTIONS.md`](ABSTRACTIONS.md).
 When the control flow feels unclear, read [`docs/FLOWS.md`](FLOWS.md). It walks
-through real keys like `s`, `x`, `b`, and `c`.
+through real keys like `s`, `b`, `c`, and `r`.
 
 ## Common Changes
 

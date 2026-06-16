@@ -37,6 +37,54 @@ func (m Model) moveProfileCursor(delta int) Model {
 	return m
 }
 
+// moveConflictCursor moves through the conflict file picker.
+func (m Model) moveConflictCursor(delta int) Model {
+	if len(m.conflicts) == 0 {
+		m.notice = "No conflict files"
+		return m
+	}
+	m.conflictCursor = clamp(m.conflictCursor+delta, 0, len(m.conflicts)-1)
+	m.ensureConflictCursorVisible()
+	return m
+}
+
+// moveStashCursor moves through the stash picker.
+func (m Model) moveStashCursor(delta int) Model {
+	if len(m.stashes) == 0 {
+		m.notice = "No stashes found"
+		return m
+	}
+	m.stashCursor = clamp(m.stashCursor+delta, 0, len(m.stashes)-1)
+	m.ensureStashCursorVisible()
+	return m
+}
+
+// moveSquashCursor moves through the squash commit picker.
+func (m Model) moveSquashCursor(delta int) Model {
+	if len(m.commits) == 0 {
+		m.notice = "No commits to squash"
+		return m
+	}
+	m.squashCursor = clamp(m.squashCursor+delta, 0, len(m.commits)-1)
+	m.ensureSquashCursorVisible()
+	return m
+}
+
+// reconcileSquashCursor keeps the selected commit valid after refreshes.
+func (m *Model) reconcileSquashCursor() {
+	if len(m.commits) == 0 {
+		m.squashCursor = 0
+		m.squashOffset = 0
+		m.squashBase = -1
+		return
+	}
+	m.squashCursor = clamp(m.squashCursor, 0, len(m.commits)-1)
+	if m.squashBase >= len(m.commits) {
+		m.squashBase = -1
+	}
+	m.ensureSquashCursorVisible()
+}
+
 // reconcileFileCursor keeps the selected file valid after the repo refreshes.
 func (m *Model) reconcileFileCursor() {
 	if len(m.files) == 0 {
@@ -96,6 +144,28 @@ func (m *Model) reconcileProfileCursor() {
 	m.ensureProfileCursorVisible()
 }
 
+// reconcileConflictCursor keeps the selected conflict valid after refreshes.
+func (m *Model) reconcileConflictCursor() {
+	if len(m.conflicts) == 0 {
+		m.conflictCursor = 0
+		m.conflictOffset = 0
+		return
+	}
+	m.conflictCursor = clamp(m.conflictCursor, 0, len(m.conflicts)-1)
+	m.ensureConflictCursorVisible()
+}
+
+// reconcileStashCursor keeps the selected stash valid after refreshes.
+func (m *Model) reconcileStashCursor() {
+	if len(m.stashes) == 0 {
+		m.stashCursor = 0
+		m.stashOffset = 0
+		return
+	}
+	m.stashCursor = clamp(m.stashCursor, 0, len(m.stashes)-1)
+	m.ensureStashCursorVisible()
+}
+
 // ensureFileCursorVisible scrolls the files list so the selected file is visible.
 func (m *Model) ensureFileCursorVisible() {
 	visibleRows := max(1, max(8, m.height-8)-4)
@@ -130,4 +200,40 @@ func (m *Model) ensureProfileCursorVisible() {
 		m.profileOffset = m.profileCursor - visibleRows + 1
 	}
 	m.profileOffset = clamp(m.profileOffset, 0, max(0, len(m.config.Profiles)-visibleRows))
+}
+
+// ensureConflictCursorVisible scrolls conflict rows so the cursor is visible.
+func (m *Model) ensureConflictCursorVisible() {
+	visibleRows := max(1, max(8, m.height-8)-4)
+	if m.conflictCursor < m.conflictOffset {
+		m.conflictOffset = m.conflictCursor
+	}
+	if m.conflictCursor >= m.conflictOffset+visibleRows {
+		m.conflictOffset = m.conflictCursor - visibleRows + 1
+	}
+	m.conflictOffset = clamp(m.conflictOffset, 0, max(0, len(m.conflicts)-visibleRows))
+}
+
+// ensureSquashCursorVisible scrolls the squash picker so the cursor is visible.
+func (m *Model) ensureSquashCursorVisible() {
+	visibleRows := max(1, max(8, m.height-8)-4)
+	if m.squashCursor < m.squashOffset {
+		m.squashOffset = m.squashCursor
+	}
+	if m.squashCursor >= m.squashOffset+visibleRows {
+		m.squashOffset = m.squashCursor - visibleRows + 1
+	}
+	m.squashOffset = clamp(m.squashOffset, 0, max(0, len(m.commits)-visibleRows))
+}
+
+// ensureStashCursorVisible scrolls stash rows so the cursor is visible.
+func (m *Model) ensureStashCursorVisible() {
+	visibleRows := max(1, max(8, m.height-8)-4)
+	if m.stashCursor < m.stashOffset {
+		m.stashOffset = m.stashCursor
+	}
+	if m.stashCursor >= m.stashOffset+visibleRows {
+		m.stashOffset = m.stashCursor - visibleRows + 1
+	}
+	m.stashOffset = clamp(m.stashOffset, 0, max(0, len(m.stashes)-visibleRows))
 }

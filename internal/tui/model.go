@@ -26,6 +26,7 @@ type Model struct {
 	review         viewport.Model
 	commit         textinput.Model
 	branchInput    textinput.Model
+	searchInput    textinput.Model
 	spinner        spinner.Model
 	loading        bool
 	info           git.RepoInfo
@@ -37,6 +38,23 @@ type Model struct {
 	branchOffset   int
 	profileCursor  int
 	profileOffset  int
+	conflicts      []string
+	conflictCursor int
+	conflictOffset int
+	stashes        []git.Stash
+	stashCursor    int
+	stashOffset    int
+	commits        []git.Commit
+	squashMark     []bool
+	squashBase     int
+	squashCursor   int
+	squashOffset   int
+	viewerContent  string
+	searchMatches  []searchMatch
+	searchCursor   int
+	searchOffset   int
+	searchReturn   string
+	searchYOffset  int
 	target         string
 	mode           string
 	err            error
@@ -67,6 +85,20 @@ type gitActionFinishedMsg struct {
 	err     error
 }
 
+// pushFinishedMsg means a push attempt finished. rejected is true when the
+// remote refused it as a non-fast-forward, so a force push could resolve it.
+type pushFinishedMsg struct {
+	output   string
+	rejected bool
+	err      error
+}
+
+// commitMessageGeneratedMsg means Codex finished generating a commit subject.
+type commitMessageGeneratedMsg struct {
+	message string
+	err     error
+}
+
 // branchesLoadedMsg means the branch picker has fresh branch data.
 type branchesLoadedMsg struct {
 	info     git.RepoInfo
@@ -74,6 +106,34 @@ type branchesLoadedMsg struct {
 	branches []string
 	mode     string
 	err      error
+}
+
+// conflictsLoadedMsg means conflict files and the selected preview are ready.
+type conflictsLoadedMsg struct {
+	info         git.RepoInfo
+	files        []git.FileStatus
+	conflicts    []string
+	markerReport string
+	review       string
+	err          error
+}
+
+// stashesLoadedMsg means stash entries and the selected diff are ready.
+type stashesLoadedMsg struct {
+	info    git.RepoInfo
+	files   []git.FileStatus
+	stashes []git.Stash
+	review  string
+	err     error
+}
+
+// squashLoadedMsg means the commits ahead of the default branch are ready for
+// the in-TUI squash picker.
+type squashLoadedMsg struct {
+	info    git.RepoInfo
+	files   []git.FileStatus
+	commits []git.Commit
+	err     error
 }
 
 // Startup
@@ -92,6 +152,11 @@ func New(runner git.Runner, cfg config.Config) Model {
 	branchInput.CharLimit = 120
 	branchInput.Prompt = "> "
 
+	searchInput := textinput.New()
+	searchInput.Placeholder = "fuzzy find in viewed file"
+	searchInput.CharLimit = 160
+	searchInput.Prompt = "/ "
+
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = keyStyle
@@ -102,7 +167,9 @@ func New(runner git.Runner, cfg config.Config) Model {
 		review:        viewport.New(80, 24),
 		commit:        commit,
 		branchInput:   branchInput,
+		searchInput:   searchInput,
 		spinner:       sp,
+		squashBase:    -1,
 		target:        "repo",
 		mode:          "review",
 		splash:        true,

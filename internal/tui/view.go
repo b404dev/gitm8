@@ -63,7 +63,7 @@ func (m Model) panelWidth() int {
 func (m Model) header() string {
 	parts := []string{m.topBar(), m.outputBar()}
 	if m.mode == "commit" {
-		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Commit message")+"\n"+m.commit.View()+"\n"+mutedStyle.Render("enter: commit  esc: cancel")))
+		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Commit message")+"\n"+m.commit.View()+"\n"+mutedStyle.Render(m.commitPromptHelp())))
 	}
 	if m.mode == "new-branch" {
 		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Create branch")+"\n"+m.branchInput.View()+"\n"+mutedStyle.Render("enter: create  esc: cancel")))
@@ -71,13 +71,27 @@ func (m Model) header() string {
 	if m.mode == "delete-branch" {
 		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Delete branch")+"\n"+m.notice+"\n"+mutedStyle.Render("l: local  r: local + remote  esc: cancel")))
 	}
+	if m.mode == "discard-file" {
+		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Discard file changes")+"\n"+m.notice+"\n"+mutedStyle.Render("y: discard  n/esc: cancel")))
+	}
+	if m.mode == "force-push" {
+		parts = append(parts, commitBoxStyle(m.width).Render(titleStyle.Render("Force push")+"\n"+m.notice+"\n"+mutedStyle.Render("y: force push (--force-with-lease)  n/esc: cancel")))
+	}
 	return strings.Join(parts, "\n")
 }
 
 // outputBar renders compact or expanded Git command output.
 func (m Model) outputBar() string {
+	if m.mode == "search" {
+		return m.searchOutputBar()
+	}
+
 	if m.loading {
-		return panelStyle.Width(m.panelWidth()).Render(keyStyle.Render("git ") + m.spinner.View() + " " + mutedStyle.Render("working..."))
+		output := strings.TrimSpace(m.gitOutput)
+		if output == "" {
+			output = "working..."
+		}
+		return panelStyle.Width(m.panelWidth()).Render(keyStyle.Render("git ") + m.spinner.View() + " " + mutedStyle.Render(output))
 	}
 
 	output := strings.TrimSpace(m.gitOutput)
@@ -104,6 +118,17 @@ func (m Model) outputBar() string {
 	b.WriteString("\n")
 	b.WriteString(style.Render(strings.Join(lines, "\n")))
 	return panelStyle.Width(m.panelWidth()).Render(b.String())
+}
+
+func (m Model) searchOutputBar() string {
+	query := strings.TrimSpace(m.searchInput.Value())
+	summary := "type word or wildcard"
+	if query != "" {
+		summary = m.searchSummary(query)
+	}
+	help := "enter/esc close  ↑ prev  ↓ next"
+	content := keyStyle.Render("find ") + m.searchInput.View() + "  " + mutedStyle.Render(summary+"  "+help)
+	return panelStyle.Width(m.panelWidth()).Render(content)
 }
 
 // outputMaxLines caps expanded Git output so the main body stays usable.
@@ -155,7 +180,7 @@ func (m Model) filesPanel(height int) string {
 	panelHeight := max(1, height-2)
 	visibleRows := max(1, panelHeight-4)
 
-	lines := []string{titleStyle.Render("Files"), mutedStyle.Render("↑/↓ select  enter preview")}
+	lines := []string{titleStyle.Render("Files"), mutedStyle.Render("↑/↓ preview  enter edit")}
 	end := min(len(m.files), m.fileOffset+visibleRows)
 	for i := m.fileOffset; i < end; i++ {
 		file := m.files[i]
@@ -166,7 +191,7 @@ func (m Model) filesPanel(height int) string {
 			pointer = keyStyle.Render("> ")
 		}
 		badge := statusBadge(file)
-		lines = append(lines, pointer+badge+" "+style.Render(trimMiddle(file.Path, width-9)))
+		lines = append(lines, pointer+badge+" "+style.Render(trimMiddle(file.DisplayPath(), width-9)))
 	}
 	if len(m.files) == 0 {
 		lines = append(lines, mutedStyle.Render("No changed files"))
@@ -195,7 +220,7 @@ func (m Model) footer() string {
 	}
 	rowOne := []string{
 		keyStyle.Render("[↑/↓]") + " files",
-		keyStyle.Render("[enter]") + " preview",
+		keyStyle.Render("[enter]") + " edit viewed file",
 		keyStyle.Render("[0]") + " repo",
 		keyStyle.Render("[s]") + " stage",
 		keyStyle.Render("[S]") + " stage all",
@@ -205,10 +230,14 @@ func (m Model) footer() string {
 	}
 	rowTwo := []string{
 		keyStyle.Render("[d]") + " diff for target",
+		keyStyle.Render("[/]") + " find in file",
+		keyStyle.Render("[x]") + " discard file",
 		keyStyle.Render("[f]") + " fetch",
 		keyStyle.Render("[p]") + " pull",
 		keyStyle.Render("[P]") + " push",
-		keyStyle.Render("[x]") + " sync",
+		keyStyle.Render("[z]") + " squash",
+		keyStyle.Render("[C]") + " conflicts",
+		keyStyle.Render("[t]") + " stashes",
 		keyStyle.Render("[b]") + " branches",
 		keyStyle.Render("[l]") + " logs",
 		keyStyle.Render("[i]") + " identity",
@@ -229,6 +258,10 @@ func (m Model) footer() string {
 // statusBadge turns Git status values into short staged/unstaged labels.
 func statusBadge(file git.FileStatus) string {
 	switch {
+	case file.Renamed():
+		return keyStyle.Render("REN")
+	case file.Deleted():
+		return errorStyle.Render("DEL")
 	case file.Staged() && file.Unstaged():
 		return activeStyle.Render("S/U")
 	case file.Staged():
@@ -249,18 +282,32 @@ func viewerTitle(mode string) string {
 		return "Switch Branch"
 	case "rebase":
 		return "Rebase"
+	case "squash":
+		return "Squash Commits"
 	case "logs":
 		return "Commit Logs"
 	case "profiles":
 		return "Switch Identity"
+	case "pull-request":
+		return "Pull Request"
 	case "help":
 		return "Help"
+	case "conflicts":
+		return "Conflicts"
+	case "stashes":
+		return "Stashes"
 	case "new-branch":
 		return "Create Branch"
 	case "delete-branch":
 		return "Delete Branch"
+	case "discard-file":
+		return "Discard File"
+	case "force-push":
+		return "Force Push"
 	case "commit":
 		return "Commit"
+	case "search":
+		return "Find In File"
 	default:
 		return "Code Review"
 	}
@@ -304,6 +351,64 @@ func (m Model) rebaseView() string {
 		fmt.Fprintf(&b, "\n%d-%d of %d\n", m.branchOffset+1, end, len(m.branches))
 	}
 	return b.String()
+}
+
+// squashView renders the in-TUI squash picker. Commits are listed newest first;
+// S marks a commit to squash, K keeps it, and B chooses the base commit that
+// receives the squashed commits.
+func (m Model) squashView() string {
+	if len(m.commits) == 0 {
+		return "No commits to squash on this branch.\n"
+	}
+
+	folds := m.squashFoldCount()
+	baseSelected := m.squashBaseSelected()
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Squash commits on %s since %s, without leaving gitm8.\n", m.info.Branch, m.config.DefaultBranch)
+	b.WriteString("↑/↓ move, S squash, K keep, B base, a mark all squash, enter apply, r refresh, esc cancel.\n")
+	b.WriteString(mutedStyle.Render("Mark commits first, then choose exactly one base commit with B. The base message is used for the combined commit.") + "\n\n")
+
+	if folds > 0 && baseSelected {
+		fmt.Fprintf(&b, "%s\n\n", keyStyle.Render(fmt.Sprintf("Squashing %d commit(s) into %s, leaving %d.", folds, m.commits[m.squashBase].Hash, len(m.commits)-folds)))
+	} else if folds > 0 {
+		fmt.Fprintf(&b, "%s\n\n", mutedStyle.Render(fmt.Sprintf("%d commit(s) marked to squash. Choose a base with B.", folds)))
+	} else {
+		fmt.Fprintf(&b, "%s\n\n", mutedStyle.Render("Nothing to squash yet - mark one or more commits with S."))
+	}
+
+	visibleRows := max(1, max(8, m.height-8)-7)
+	end := min(len(m.commits), m.squashOffset+visibleRows)
+	for i := m.squashOffset; i < end; i++ {
+		pointer := "  "
+		if i == m.squashCursor {
+			pointer = keyStyle.Render("> ")
+		}
+		commit := m.commits[i]
+		var tag string
+		switch {
+		case baseSelected && i == m.squashBase:
+			tag = keyStyle.Render("base  ")
+		case m.squashMark[i]:
+			tag = activeStyle.Render("squash")
+		default:
+			tag = mutedStyle.Render("keep  ")
+		}
+		fmt.Fprintf(&b, "%s%s  %s  %s\n", pointer, tag, mutedStyle.Render(commit.Hash), commit.Subject)
+	}
+	if len(m.commits) > visibleRows {
+		fmt.Fprintf(&b, "\n%d-%d of %d\n", m.squashOffset+1, end, len(m.commits))
+	}
+	return b.String()
+}
+
+// squashUnavailableView explains why squashing is not possible right now.
+func (m Model) squashUnavailableView(err error) string {
+	reason := "squashing is not available right now"
+	if err != nil {
+		reason = err.Error()
+	}
+	return "Cannot squash: " + reason + "\n\nFix the issue above and press z to try again.\n"
 }
 
 // branchesView renders branch rows from plain inputs so it is easy to test.
@@ -355,6 +460,82 @@ func (m Model) profilesView() string {
 	return b.String()
 }
 
+// conflictsView renders conflict rows, marker lines, and the selected file preview.
+func (m Model) conflictsView(markerReport string, preview string) string {
+	if len(m.conflicts) == 0 {
+		return "No conflict files found.\n\nUse normal Git commands or pull/rebase again when ready.\n"
+	}
+
+	var b strings.Builder
+	b.WriteString("Resolve conflicts, then press m to mark resolved. enter opens the file in your editor. c continue, a abort, s skip, r refresh, esc return.\n\n")
+	visibleRows := max(1, max(8, m.height-8)-4)
+	end := min(len(m.conflicts), m.conflictOffset+visibleRows)
+	for i := m.conflictOffset; i < end; i++ {
+		pointer := "  "
+		if i == m.conflictCursor {
+			pointer = "> "
+		}
+		fmt.Fprintf(&b, "%s%s\n", pointer, m.conflicts[i])
+	}
+	if len(m.conflicts) > visibleRows {
+		fmt.Fprintf(&b, "\n%d-%d of %d\n", m.conflictOffset+1, end, len(m.conflicts))
+	}
+	b.WriteString("\n")
+	if strings.TrimSpace(markerReport) != "" {
+		b.WriteString(strings.TrimSpace(markerReport))
+		b.WriteString("\n\n")
+	}
+	b.WriteString(strings.TrimSpace(preview))
+	b.WriteString("\n")
+	return b.String()
+}
+
+// stashesView renders stash rows above the selected stash diff.
+func (m Model) stashesView(diff string) string {
+	if len(m.stashes) == 0 {
+		return "No stashes found.\n\nPress n to stash current changes, or esc to return.\n"
+	}
+
+	var b strings.Builder
+	b.WriteString("Stashes: n new, a apply, p pop, D drop, r refresh, esc return. j/k scroll the diff.\n\n")
+	visibleRows := max(1, max(8, m.height-8)-4)
+	end := min(len(m.stashes), m.stashOffset+visibleRows)
+	for i := m.stashOffset; i < end; i++ {
+		pointer := "  "
+		if i == m.stashCursor {
+			pointer = "> "
+		}
+		stash := m.stashes[i]
+		fmt.Fprintf(&b, "%s%s  %s\n", pointer, stash.Ref, stash.Subject)
+	}
+	if len(m.stashes) > visibleRows {
+		fmt.Fprintf(&b, "\n%d-%d of %d\n", m.stashOffset+1, end, len(m.stashes))
+	}
+	b.WriteString("\n")
+	b.WriteString(strings.TrimSpace(diff))
+	b.WriteString("\n")
+	return b.String()
+}
+
+// pullRequestView renders the PR creation choice.
+func (m Model) pullRequestView() string {
+	provider := m.config.AIProvider
+	if provider == "" {
+		provider = "codex"
+	}
+	if !m.config.AIAvailable {
+		return fmt.Sprintf("Create a pull request for the current branch.\n\n  m  write it yourself with gh pr create\n\n  AI generation unavailable: %s\n\n  esc  cancel\n", strings.TrimPrefix(m.aiUnavailableNotice(), "AI generation unavailable: "))
+	}
+	return fmt.Sprintf("Create a pull request for the current branch.\n\n  g  generate title and description with %s\n  m  write it yourself with gh pr create\n\n  esc  cancel\n", provider)
+}
+
+func (m Model) commitPromptHelp() string {
+	if !m.config.AIAvailable {
+		return "enter: commit  esc: cancel"
+	}
+	return "ctrl+g: generate  enter: commit  esc: cancel"
+}
+
 // Help View
 
 // helpView renders the in-app reference for keys, config, profiles, and docs.
@@ -363,22 +544,34 @@ func (m Model) helpView() string {
 	b.WriteString("Press esc or h to return  ·  j/k to scroll\n\n")
 
 	b.WriteString(titleStyle.Render("KEYS") + "\n")
+	commitHelp := "commit staged changes"
+	if m.config.AIAvailable {
+		commitHelp = "commit staged changes (ctrl+g generates a message in commit mode)"
+	}
+	pushHelp := "pull (--ff-only) / push (offers force-with-lease if rejected)"
+	if m.config.MattMode {
+		pushHelp = "pull (--ff-only) / push (matt_mode: always --force, no safety net)"
+	}
 	keys := [][2]string{
 		{"↑/↓", "move file selection (previews it)"},
-		{"enter", "preview the selected file"},
+		{"enter", "open the viewed file in GITM8_EDITOR"},
 		{"0", "back to the repo-wide code review"},
 		{"d", "toggle the selected file between diff and contents"},
+		{"/", "search and highlight inside the viewed file contents"},
+		{"x", "discard all changes to selected file"},
 		{"s / S", "stage selected file / stage all"},
 		{"u / U", "unstage selected file / unstage all"},
-		{"c", "commit staged changes"},
+		{"c", commitHelp},
 		{"f", "fetch (--all --prune)"},
-		{"p / P", "pull (--ff-only) / push"},
-		{"x", "sync: pull --rebase, then push"},
+		{"p / P", pushHelp},
+		{"z", "mark commits, choose a base, squash in-TUI (no editor)"},
+		{"C", "conflict mode for unmerged files"},
+		{"t", "stash panel"},
 		{"b", "branch switcher"},
 		{"W", "in branch switcher: switch and bring current changes"},
 		{"l", "view recent commit logs"},
 		{"i", "identity switcher (git user profiles)"},
-		{"r / ctrl+p", "create or show pull request for current branch"},
+		{"r / ctrl+p", "pull request options"},
 		{"R / ctrl+r", "rebase the current branch onto another"},
 		{"h", "this help"},
 		{"o", "expand or collapse the git output box"},
@@ -394,13 +587,14 @@ func (m Model) helpView() string {
 	}
 
 	b.WriteString("\n" + titleStyle.Render("CONFIG") + "\n")
-	b.WriteString("  Loaded from ~/.gitm8rc then ~/.gitm8/credentials.\n")
+	b.WriteString("  Loaded from ~/.gitm8/.gitm8rc, ~/.gitm8/gitm8rc, legacy ~/.gitm8rc, then credentials.\n")
 	b.WriteString("  Env vars override defaults.\n")
 	b.WriteString("  Themes: " + strings.Join(themeNames(), ", ") + ".\n")
 	for _, line := range []string{
 		"GITM8_DEFAULT_BRANCH", "GITM8_EDITOR", "GITM8_THEME",
 		"GITM8_CONFIRM_DESTRUCTIVE_ACTIONS", "GITM8_FETCH_ON_STARTUP",
-		"GITM8_SHOW_COMMIT_GRAPH",
+		"GITM8_SHOW_COMMIT_GRAPH", "GITM8_AI_PROVIDER",
+		"GITM8_OLLAMA_URL",
 	} {
 		fmt.Fprintf(&b, "    %s\n", line)
 	}
