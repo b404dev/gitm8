@@ -143,6 +143,9 @@ Open conflict mode for unmerged files.
 .B t
 Open the stash panel.
 .TP
+.B n
+Stash the selected file from the main viewer.
+.TP
 .B l
 View recent commit logs.
 .TP
@@ -254,12 +257,15 @@ to abort, and
 .B s
 to skip the current patch.
 .SH STASHES
+Use
+.B n
+from the main viewer to stash the selected file only.
 The stash panel lists
 .BR "git stash list"
 entries and previews the selected stash diff.
 Use
 .B n
-to stash current tracked and untracked changes,
+inside the stash panel to stash from there too,
 .B a
 to apply,
 .B p

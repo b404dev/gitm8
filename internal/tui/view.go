@@ -82,8 +82,14 @@ func (m Model) header() string {
 
 // outputBar renders compact or expanded Git command output.
 func (m Model) outputBar() string {
+	if m.fileFilterActive {
+		return m.fileFilterOutputBar()
+	}
 	if m.mode == "search" {
 		return m.searchOutputBar()
+	}
+	if query := strings.TrimSpace(m.fileFilter.Value()); query != "" {
+		return m.fileFilterSummaryBar()
 	}
 
 	if m.loading {
@@ -91,7 +97,7 @@ func (m Model) outputBar() string {
 		if output == "" {
 			output = "working..."
 		}
-		return panelStyle.Width(m.panelWidth()).Render(keyStyle.Render("git ") + m.spinner.View() + " " + mutedStyle.Render(output))
+		return panelStyle.Width(m.panelWidth()).Render(m.outputBarPrefix() + keyStyle.Render("git ") + m.spinner.View() + " " + mutedStyle.Render(output))
 	}
 
 	output := strings.TrimSpace(m.gitOutput)
@@ -106,11 +112,12 @@ func (m Model) outputBar() string {
 	contentWidth := max(20, m.panelWidth()-6)
 	compact := oneLine(output)
 	if !m.outputExpanded {
-		return panelStyle.Width(m.panelWidth()).Render(keyStyle.Render("git ") + style.Render(trimMiddle(compact, contentWidth)))
+		return panelStyle.Width(m.panelWidth()).Render(m.outputBarPrefix() + keyStyle.Render("git ") + style.Render(trimMiddle(compact, contentWidth)))
 	}
 
 	lines, truncated := visibleOutputLines(output, contentWidth, m.outputMaxLines())
 	var b strings.Builder
+	b.WriteString(m.outputBarPrefix())
 	b.WriteString(keyStyle.Render("git"))
 	if truncated > 0 {
 		fmt.Fprintf(&b, " %s", mutedStyle.Render(fmt.Sprintf("(%d earlier lines hidden)", truncated)))
@@ -118,6 +125,14 @@ func (m Model) outputBar() string {
 	b.WriteString("\n")
 	b.WriteString(style.Render(strings.Join(lines, "\n")))
 	return panelStyle.Width(m.panelWidth()).Render(b.String())
+}
+
+func (m Model) outputBarPrefix() string {
+	path := m.selectedPath()
+	if path == "" || (m.mode != "preview" && m.mode != "review") {
+		return ""
+	}
+	return keyStyle.Render("path ") + mutedStyle.Render(path) + "  "
 }
 
 func (m Model) searchOutputBar() string {
@@ -128,6 +143,23 @@ func (m Model) searchOutputBar() string {
 	}
 	help := "enter/esc close  ↑ prev  ↓ next"
 	content := keyStyle.Render("find ") + m.searchInput.View() + "  " + mutedStyle.Render(summary+"  "+help)
+	return panelStyle.Width(m.panelWidth()).Render(content)
+}
+
+func (m Model) fileFilterOutputBar() string {
+	return m.fileFilterSummaryBar()
+}
+
+func (m Model) fileFilterSummaryBar() string {
+	query := strings.TrimSpace(m.fileFilter.Value())
+	total := len(m.files)
+	matches := len(m.filteredFiles())
+	summary := fmt.Sprintf("%d/%d files", matches, total)
+	if query == "" {
+		summary = fmt.Sprintf("%d files", total)
+	}
+	help := "enter keep  esc clear  type to filter"
+	content := keyStyle.Render("files ") + m.fileFilter.View() + "  " + mutedStyle.Render(summary+"  "+help)
 	return panelStyle.Width(m.panelWidth()).Render(content)
 }
 
@@ -176,14 +208,18 @@ func (m Model) topBar() string {
 
 // filesPanel renders the changed-files list and keeps the cursor visible.
 func (m Model) filesPanel(height int) string {
+	return m.filesPanelWithRows(height, m.filteredFiles())
+}
+
+func (m Model) filesPanelWithRows(height int, files []git.FileStatus) string {
 	width := m.filesWidth()
 	panelHeight := max(1, height-2)
 	visibleRows := max(1, panelHeight-4)
 
 	lines := []string{titleStyle.Render("Files"), mutedStyle.Render("↑/↓ preview  enter edit")}
-	end := min(len(m.files), m.fileOffset+visibleRows)
+	end := min(len(files), m.fileOffset+visibleRows)
 	for i := m.fileOffset; i < end; i++ {
-		file := m.files[i]
+		file := files[i]
 		pointer := "  "
 		style := lipgloss.NewStyle()
 		if i == m.fileCursor {
@@ -191,13 +227,15 @@ func (m Model) filesPanel(height int) string {
 			pointer = keyStyle.Render("> ")
 		}
 		badge := statusBadge(file)
-		lines = append(lines, pointer+badge+" "+style.Render(trimMiddle(file.DisplayPath(), width-9)))
+		lines = append(lines, pointer+badge+" "+style.Render(trimMiddle(fileListName(file), width-9)))
 	}
 	if len(m.files) == 0 {
 		lines = append(lines, mutedStyle.Render("No changed files"))
+	} else if len(files) == 0 {
+		lines = append(lines, mutedStyle.Render("No changed files match the current filter"))
 	}
-	if len(m.files) > visibleRows {
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("%d-%d of %d", m.fileOffset+1, end, len(m.files))))
+	if len(files) > visibleRows {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("%d-%d of %d", m.fileOffset+1, end, len(files))))
 	}
 
 	return panelStyle.Width(width).Height(panelHeight).Render(strings.Join(lines, "\n"))
@@ -218,39 +256,202 @@ func (m Model) footer() string {
 	if m.footerHidden {
 		return ""
 	}
-	rowOne := []string{
-		keyStyle.Render("[↑/↓]") + " files",
-		keyStyle.Render("[enter]") + " edit viewed file",
-		keyStyle.Render("[0]") + " repo",
-		keyStyle.Render("[s]") + " stage",
-		keyStyle.Render("[S]") + " stage all",
-		keyStyle.Render("[u]") + " unstage",
-		keyStyle.Render("[U]") + " unstage all",
-		keyStyle.Render("[c]") + " commit",
+	rows := m.footerRows()
+	if len(rows) == 0 {
+		return ""
 	}
-	rowTwo := []string{
-		keyStyle.Render("[d]") + " diff for target",
-		keyStyle.Render("[/]") + " find in file",
-		keyStyle.Render("[x]") + " discard file",
-		keyStyle.Render("[f]") + " fetch",
-		keyStyle.Render("[p]") + " pull",
-		keyStyle.Render("[P]") + " push",
-		keyStyle.Render("[z]") + " squash",
-		keyStyle.Render("[C]") + " conflicts",
-		keyStyle.Render("[t]") + " stashes",
-		keyStyle.Render("[b]") + " branches",
-		keyStyle.Render("[l]") + " logs",
-		keyStyle.Render("[i]") + " identity",
-		keyStyle.Render("[y]") + " yazi",
-		keyStyle.Render("[r/ctrl+p]") + " PR",
-		keyStyle.Render("[R/ctrl+r]") + " rebase",
-		keyStyle.Render("[h]") + " help",
-		keyStyle.Render("[o]") + " output",
-		keyStyle.Render("[tab]") + " hide bar",
-		keyStyle.Render("[j/k]") + " viewer scroll",
-		keyStyle.Render("[q]") + " quit",
+	return mutedStyle.Width(max(20, m.width)).Render(strings.Join(rows, "\n"))
+}
+
+func (m Model) footerRows() []string {
+	switch m.mode {
+	case "branches":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[↑/↓]") + " choose branch",
+				keyStyle.Render("[enter]") + " switch",
+				keyStyle.Render("[W]") + " switch with changes",
+				keyStyle.Render("[n]") + " create",
+			}, "  "),
+			strings.Join([]string{
+				keyStyle.Render("[D]") + " delete",
+				keyStyle.Render("[r]") + " refresh",
+				keyStyle.Render("[esc]") + " return",
+			}, "  "),
+		}
+	case "rebase":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[↑/↓]") + " choose target",
+				keyStyle.Render("[enter]") + " rebase",
+				keyStyle.Render("[c]") + " continue",
+				keyStyle.Render("[a]") + " abort",
+			}, "  "),
+			strings.Join([]string{
+				keyStyle.Render("[s]") + " skip",
+				keyStyle.Render("[r]") + " refresh",
+				keyStyle.Render("[esc]") + " cancel",
+			}, "  "),
+		}
+	case "conflicts":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[↑/↓]") + " choose file",
+				keyStyle.Render("[enter]") + " open editor",
+				keyStyle.Render("[m]") + " mark resolved",
+				keyStyle.Render("[c]") + " continue",
+			}, "  "),
+			strings.Join([]string{
+				keyStyle.Render("[a]") + " abort",
+				keyStyle.Render("[s]") + " skip",
+				keyStyle.Render("[r]") + " refresh",
+				keyStyle.Render("[esc]") + " return",
+			}, "  "),
+		}
+	case "stashes":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[↑/↓]") + " choose stash",
+				keyStyle.Render("[n]") + " stash new",
+				keyStyle.Render("[a]") + " apply",
+				keyStyle.Render("[p]") + " pop",
+			}, "  "),
+			strings.Join([]string{
+				keyStyle.Render("[D]") + " drop",
+				keyStyle.Render("[r]") + " refresh",
+				keyStyle.Render("[esc]") + " return",
+			}, "  "),
+		}
+	case "squash":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[↑/↓]") + " choose commit",
+				keyStyle.Render("[S]") + " squash",
+				keyStyle.Render("[K]") + " keep",
+				keyStyle.Render("[B]") + " base",
+			}, "  "),
+			strings.Join([]string{
+				keyStyle.Render("[a]") + " mark all",
+				keyStyle.Render("[enter]") + " apply",
+				keyStyle.Render("[r]") + " refresh",
+				keyStyle.Render("[esc]") + " cancel",
+			}, "  "),
+		}
+	case "profiles":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[↑/↓]") + " choose profile",
+				keyStyle.Render("[enter]") + " apply",
+				keyStyle.Render("[esc]") + " return",
+			}, "  "),
+		}
+	case "pull-request":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[g]") + " generate",
+				keyStyle.Render("[m]") + " write it yourself",
+				keyStyle.Render("[esc]") + " return",
+			}, "  "),
+		}
+	case "commit":
+		lines := []string{
+			strings.Join([]string{
+				keyStyle.Render("[enter]") + " commit",
+				keyStyle.Render("[esc]") + " cancel",
+			}, "  "),
+		}
+		if m.config.AIAvailable {
+			lines = append([]string{strings.Join([]string{keyStyle.Render("[ctrl+g]") + " generate subject"}, "  ")}, lines...)
+		}
+		return lines
+	case "new-branch":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[enter]") + " create branch",
+				keyStyle.Render("[esc]") + " cancel",
+			}, "  "),
+		}
+	case "delete-branch":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[l]") + " local only",
+				keyStyle.Render("[r]") + " local + remote",
+				keyStyle.Render("[esc]") + " cancel",
+			}, "  "),
+		}
+	case "discard-file":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[y]") + " discard changes",
+				keyStyle.Render("[esc]") + " cancel",
+			}, "  "),
+		}
+	case "force-push":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[y]") + " force push",
+				keyStyle.Render("[esc]") + " cancel",
+			}, "  "),
+		}
+	case "search":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[enter]") + " jump to match",
+				keyStyle.Render("[↑/↓]") + " match navigation",
+				keyStyle.Render("[esc]") + " close",
+			}, "  "),
+		}
+	case "help":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[j/k]") + " scroll",
+				keyStyle.Render("[esc]") + " return",
+			}, "  "),
+		}
+	default:
+		filterLabel := "filter files"
+		if m.mode == "preview" {
+			filterLabel = "find in file"
+		}
+		rows := []string{
+			strings.Join([]string{
+				keyStyle.Render("[↑/↓]") + " files",
+				keyStyle.Render("[enter]") + " edit viewed file",
+				keyStyle.Render("[0]") + " repo",
+				keyStyle.Render("[s]") + " stage",
+				keyStyle.Render("[S]") + " stage all",
+				keyStyle.Render("[u]") + " unstage",
+				keyStyle.Render("[U]") + " unstage all",
+				keyStyle.Render("[n]") + " stash file",
+				keyStyle.Render("[c]") + " commit",
+				keyStyle.Render("[/]") + " " + filterLabel,
+			}, "  "),
+			strings.Join([]string{
+				keyStyle.Render("[d]") + " diff for target",
+				keyStyle.Render("[x]") + " discard file",
+				keyStyle.Render("[f]") + " fetch",
+				keyStyle.Render("[p]") + " pull",
+				keyStyle.Render("[P]") + " push",
+				keyStyle.Render("[z]") + " squash",
+				keyStyle.Render("[C]") + " conflicts",
+				keyStyle.Render("[t]") + " stashes",
+				keyStyle.Render("[b]") + " branches",
+				keyStyle.Render("[l]") + " logs",
+				keyStyle.Render("[i]") + " identity",
+			}, "  "),
+			strings.Join([]string{
+				keyStyle.Render("[y]") + " yazi",
+				keyStyle.Render("[r]") + " PR",
+				keyStyle.Render("[R]") + " rebase",
+				keyStyle.Render("[h]") + " help",
+				keyStyle.Render("[o]") + " output",
+				keyStyle.Render("[tab]") + " hide bar",
+				keyStyle.Render("[j/k]") + " viewer scroll",
+				keyStyle.Render("[q]") + " quit",
+			}, "  "),
+		}
+		return rows
 	}
-	return mutedStyle.Width(max(20, m.width)).Render(strings.Join(rowOne, "  ") + "\n" + strings.Join(rowTwo, "  "))
 }
 
 // Small View Helpers
@@ -561,6 +762,7 @@ func (m Model) helpView() string {
 		{"x", "discard all changes to selected file"},
 		{"s / S", "stage selected file / stage all"},
 		{"u / U", "unstage selected file / unstage all"},
+		{"n", "stash selected file"},
 		{"c", commitHelp},
 		{"f", "fetch (--all --prune)"},
 		{"p / P", pushHelp},
@@ -571,8 +773,8 @@ func (m Model) helpView() string {
 		{"W", "in branch switcher: switch and bring current changes"},
 		{"l", "view recent commit logs"},
 		{"i", "identity switcher (git user profiles)"},
-		{"r / ctrl+p", "pull request options"},
-		{"R / ctrl+r", "rebase the current branch onto another"},
+		{"r", "pull request options"},
+		{"R", "rebase the current branch onto another"},
 		{"h", "this help"},
 		{"o", "expand or collapse the git output box"},
 		{"tab", "hide or show the footer key bar"},

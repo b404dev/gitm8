@@ -72,6 +72,10 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.fileFilterActive {
+		return m.updateFileFilter(msg)
+	}
+
 	if next, cmd, handled := m.updateFocusedMode(msg); handled {
 		return next, cmd
 	}
@@ -142,7 +146,10 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		logging.Info("tui", "updateDashboardKey", "footer_toggle", logging.F("hidden", m.footerHidden))
 		return m, nil
 	case "/":
-		return m.startSearch()
+		if m.mode == "preview" {
+			return m.startSearch()
+		}
+		return m.startFileFilter()
 	case "z":
 		if m.info.Branch == "" || m.info.Branch == "detached" {
 			return m.withNotice("Cannot squash commits while detached"), nil
@@ -154,7 +161,7 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.notice = ""
 		m.err = nil
 		return m, loadSquash(m.runner, m.config.DefaultBranch)
-	case "r", "ctrl+p":
+	case "r":
 		m.mode = "pull-request"
 		m.notice = ""
 		m.err = nil
@@ -165,7 +172,7 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		logging.Info("tui", "updateDashboardKey", "quit", logging.F("key", msg.String()))
 		return m, tea.Quit
-	case "R", "ctrl+r":
+	case "R":
 		m.mode = "rebase"
 		m.notice = ""
 		m.err = nil
@@ -191,13 +198,14 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = "review"
 		return m, loadReview(m.runner, "")
 	case "enter":
-		if len(m.files) == 0 {
+		files := m.filteredFiles()
+		if len(files) == 0 {
 			return m.withNotice("No changed files"), nil
 		}
-		if m.target == m.files[m.fileCursor].Path && (m.mode == "preview" || m.mode == "review") {
+		if m.target == files[m.fileCursor].Path && (m.mode == "preview" || m.mode == "review") {
 			return m.openSelectedInEditor()
 		}
-		m.target = m.files[m.fileCursor].Path
+		m.target = files[m.fileCursor].Path
 		m.mode = "preview"
 		return m, loadPreview(m.runner, m.target)
 	case "f":
@@ -266,6 +274,14 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.action("Unstaged all changes", true, func(ctx context.Context) (string, error) {
 			return m.runner.UnstageAllOutput(ctx)
 		})
+	case "n":
+		file, ok := m.selectedFile()
+		if !ok {
+			return m.withNotice("Select a file before stashing"), nil
+		}
+		return m.action("Stashed "+file.DisplayPath(), true, func(ctx context.Context) (string, error) {
+			return m.runner.StashPushPathsOutput(ctx, file.GitPaths()...)
+		})
 	case "c":
 		m.mode = "commit"
 		m.commit.SetValue("")
@@ -277,13 +293,13 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, openYazi()
 	case "down":
 		m = m.moveFileCursor(1)
-		if len(m.files) == 0 {
+		if len(m.filteredFiles()) == 0 {
 			return m, nil
 		}
 		return m, loadPreview(m.runner, m.target)
 	case "up":
 		m = m.moveFileCursor(-1)
-		if len(m.files) == 0 {
+		if len(m.filteredFiles()) == 0 {
 			return m, nil
 		}
 		return m, loadPreview(m.runner, m.target)
@@ -294,11 +310,12 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // selectedFile returns the file row currently highlighted in the files panel.
 func (m Model) selectedFile() (git.FileStatus, bool) {
-	if len(m.files) == 0 {
+	files := m.filteredFiles()
+	if len(files) == 0 {
 		return git.FileStatus{}, false
 	}
-	cursor := clamp(m.fileCursor, 0, len(m.files)-1)
-	return m.files[cursor], true
+	cursor := clamp(m.fileCursor, 0, len(files)-1)
+	return files[cursor], true
 }
 
 // Shared Viewer Keys
@@ -359,7 +376,7 @@ func (m Model) handleRepoLoaded(msg repoLoadedMsg) Model {
 	m.viewerContent = msg.review
 	m.reconcileFileCursor()
 	m.err = msg.err
-	m.notice = ""
+	m.notice = msg.notice
 
 	review := msg.review
 	if msg.mode == "preview" {
@@ -391,6 +408,53 @@ func (m Model) startSearch() (tea.Model, tea.Cmd) {
 	m.review.SetContent(m.searchView())
 	m.review.SetYOffset(m.searchYOffset)
 	return m, nil
+}
+
+// startFileFilter opens a focused filter for the changed-files panel.
+func (m Model) startFileFilter() (tea.Model, tea.Cmd) {
+	if len(m.files) == 0 {
+		return m.withNotice("No changed files to filter"), nil
+	}
+	m.fileFilterActive = true
+	m.fileFilter.Focus()
+	m.fileCursor = 0
+	m.fileOffset = 0
+	m.reconcileFileCursor()
+	m.notice = ""
+	m.err = nil
+	return m, nil
+}
+
+// updateFileFilter lets the user narrow the changed-files list while typing.
+func (m Model) updateFileFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		m.fileFilterActive = false
+		m.fileFilter.Blur()
+		m.notice = "File filter applied"
+		m.err = nil
+		return m, nil
+	case "esc":
+		m.fileFilterActive = false
+		m.fileFilter.Blur()
+		m.fileFilter.SetValue("")
+		m.reconcileFileCursor()
+		m.notice = "File filter cleared"
+		m.err = nil
+		return m, nil
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	}
+
+	old := m.fileFilter.Value()
+	var cmd tea.Cmd
+	m.fileFilter, cmd = m.fileFilter.Update(msg)
+	if m.fileFilter.Value() != old {
+		m.fileCursor = 0
+		m.fileOffset = 0
+		m.reconcileFileCursor()
+	}
+	return m, cmd
 }
 
 // updateSearch lets the user fuzzy-find lines inside the current file preview.
@@ -502,9 +566,6 @@ func (m Model) handleGitActionFinished(msg gitActionFinishedMsg) (tea.Model, tea
 	logging.Info("tui", "handleGitActionFinished", "action_complete", logging.F("refresh", msg.refresh), logging.F("output_bytes", len(msg.output)))
 	m.notice = msg.output
 	m.gitOutput = msg.output
-	if msg.refresh {
-		return m, loadCurrent(m.runner, m.selectedPath(), m.mode, m.config.ShowCommitGraph)
-	}
 	if m.mode == "branches" {
 		return m, loadBranches(m.runner)
 	}
@@ -512,7 +573,10 @@ func (m Model) handleGitActionFinished(msg gitActionFinishedMsg) (tea.Model, tea
 		return m, loadConflicts(m.runner, m.conflictCursor)
 	}
 	if m.mode == "stashes" {
-		return m, loadStashes(m.runner, m.stashCursor)
+		return m, loadStashesWithNotice(m.runner, m.stashCursor, msg.output)
+	}
+	if msg.refresh {
+		return m, loadCurrentWithNotice(m.runner, m.selectedPath(), m.mode, m.config.ShowCommitGraph, msg.output)
 	}
 	if strings.TrimSpace(msg.output) != "" {
 		m.review.SetContent(msg.output)
@@ -597,7 +661,7 @@ func (m Model) handleStashesLoaded(msg stashesLoadedMsg) Model {
 	m.reconcileFileCursor()
 	m.reconcileStashCursor()
 	m.err = msg.err
-	m.notice = ""
+	m.notice = msg.notice
 
 	m.review.SetContent(m.stashesView(msg.review))
 	m.review.GotoTop()

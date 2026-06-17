@@ -23,47 +23,49 @@ type Model struct {
 	ready  bool
 	splash bool
 
-	review         viewport.Model
-	commit         textinput.Model
-	branchInput    textinput.Model
-	searchInput    textinput.Model
-	spinner        spinner.Model
-	loading        bool
-	info           git.RepoInfo
-	files          []git.FileStatus
-	branches       []string
-	fileCursor     int
-	fileOffset     int
-	branchCursor   int
-	branchOffset   int
-	profileCursor  int
-	profileOffset  int
-	conflicts      []string
-	conflictCursor int
-	conflictOffset int
-	stashes        []git.Stash
-	stashCursor    int
-	stashOffset    int
-	commits        []git.Commit
-	squashMark     []bool
-	squashBase     int
-	squashCursor   int
-	squashOffset   int
-	viewerContent  string
-	searchMatches  []searchMatch
-	searchCursor   int
-	searchOffset   int
-	searchReturn   string
-	searchYOffset  int
-	target         string
-	mode           string
-	err            error
-	notice         string
-	gitOutput      string
-	outputExpanded bool
-	footerHidden   bool
-	splashFrame    int
-	splashMessage  string
+	review           viewport.Model
+	commit           textinput.Model
+	branchInput      textinput.Model
+	fileFilter       textinput.Model
+	searchInput      textinput.Model
+	spinner          spinner.Model
+	loading          bool
+	info             git.RepoInfo
+	files            []git.FileStatus
+	branches         []string
+	fileCursor       int
+	fileOffset       int
+	branchCursor     int
+	branchOffset     int
+	profileCursor    int
+	profileOffset    int
+	conflicts        []string
+	conflictCursor   int
+	conflictOffset   int
+	stashes          []git.Stash
+	stashCursor      int
+	stashOffset      int
+	commits          []git.Commit
+	squashMark       []bool
+	squashBase       int
+	squashCursor     int
+	squashOffset     int
+	viewerContent    string
+	fileFilterActive bool
+	searchMatches    []searchMatch
+	searchCursor     int
+	searchOffset     int
+	searchReturn     string
+	searchYOffset    int
+	target           string
+	mode             string
+	err              error
+	notice           string
+	gitOutput        string
+	outputExpanded   bool
+	footerHidden     bool
+	splashFrame      int
+	splashMessage    string
 }
 
 // Messages Sent Back To Update
@@ -75,6 +77,7 @@ type repoLoadedMsg struct {
 	review string
 	target string
 	mode   string
+	notice string
 	err    error
 }
 
@@ -124,6 +127,7 @@ type stashesLoadedMsg struct {
 	files   []git.FileStatus
 	stashes []git.Stash
 	review  string
+	notice  string
 	err     error
 }
 
@@ -152,6 +156,11 @@ func New(runner git.Runner, cfg config.Config) Model {
 	branchInput.CharLimit = 120
 	branchInput.Prompt = "> "
 
+	fileFilter := textinput.New()
+	fileFilter.Placeholder = "filter changed files"
+	fileFilter.CharLimit = 160
+	fileFilter.Prompt = "/ "
+
 	searchInput := textinput.New()
 	searchInput.Placeholder = "fuzzy find in viewed file"
 	searchInput.CharLimit = 160
@@ -167,6 +176,7 @@ func New(runner git.Runner, cfg config.Config) Model {
 		review:        viewport.New(80, 24),
 		commit:        commit,
 		branchInput:   branchInput,
+		fileFilter:    fileFilter,
 		searchInput:   searchInput,
 		spinner:       sp,
 		squashBase:    -1,

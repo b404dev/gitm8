@@ -2,12 +2,13 @@ package tui
 
 // moveFileCursor changes the selected file and switches the viewer to preview mode.
 func (m Model) moveFileCursor(delta int) Model {
-	if len(m.files) == 0 {
+	files := m.filteredFiles()
+	if len(files) == 0 {
 		m.notice = "No changed files"
 		return m
 	}
-	m.fileCursor = clamp(m.fileCursor+delta, 0, len(m.files)-1)
-	m.target = m.files[m.fileCursor].Path
+	m.fileCursor = clamp(m.fileCursor+delta, 0, len(files)-1)
+	m.target = files[m.fileCursor].Path
 	m.mode = "preview"
 	m.err = nil
 	m.notice = ""
@@ -87,6 +88,7 @@ func (m *Model) reconcileSquashCursor() {
 
 // reconcileFileCursor keeps the selected file valid after the repo refreshes.
 func (m *Model) reconcileFileCursor() {
+	files := m.filteredFiles()
 	if len(m.files) == 0 {
 		m.fileCursor = 0
 		m.fileOffset = 0
@@ -96,16 +98,23 @@ func (m *Model) reconcileFileCursor() {
 		}
 		return
 	}
+	if len(files) == 0 {
+		m.fileCursor = 0
+		m.fileOffset = 0
+		return
+	}
 	if m.target != "" && m.target != "repo" {
-		for i, file := range m.files {
+		for i, file := range files {
 			if file.Path == m.target {
 				m.fileCursor = i
+				m.target = file.Path
 				m.ensureFileCursorVisible()
 				return
 			}
 		}
 	}
-	m.fileCursor = clamp(m.fileCursor, 0, len(m.files)-1)
+	m.fileCursor = clamp(m.fileCursor, 0, len(files)-1)
+	m.target = files[m.fileCursor].Path
 	m.ensureFileCursorVisible()
 }
 
@@ -168,6 +177,11 @@ func (m *Model) reconcileStashCursor() {
 
 // ensureFileCursorVisible scrolls the files list so the selected file is visible.
 func (m *Model) ensureFileCursorVisible() {
+	files := m.filteredFiles()
+	if len(files) == 0 {
+		m.fileOffset = 0
+		return
+	}
 	visibleRows := max(1, max(8, m.height-8)-4)
 	if m.fileCursor < m.fileOffset {
 		m.fileOffset = m.fileCursor
@@ -175,7 +189,7 @@ func (m *Model) ensureFileCursorVisible() {
 	if m.fileCursor >= m.fileOffset+visibleRows {
 		m.fileOffset = m.fileCursor - visibleRows + 1
 	}
-	m.fileOffset = clamp(m.fileOffset, 0, max(0, len(m.files)-visibleRows))
+	m.fileOffset = clamp(m.fileOffset, 0, max(0, len(files)-visibleRows))
 }
 
 // ensureBranchCursorVisible scrolls the branch picker so the selected branch is visible.

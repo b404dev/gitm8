@@ -82,6 +82,70 @@ func TestSquashFlowCanMoveBase(t *testing.T) {
 	}
 }
 
+func TestStashPanelCanCreateStash(t *testing.T) {
+	dir := newFlowRepo(t, 0)
+	m := newFlowModel(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, "scratch.txt"), []byte("scratch\n"), 0o644); err != nil {
+		t.Fatalf("write scratch: %v", err)
+	}
+
+	m = drive(t, m, key("t"))
+	if m.mode != "stashes" {
+		t.Fatalf("after t, mode = %q, want stashes", m.mode)
+	}
+
+	m = drive(t, m, key("n"))
+	if m.err != nil {
+		t.Fatalf("stash action returned error: %v", m.err)
+	}
+	if len(m.stashes) != 1 {
+		t.Fatalf("stashes after n = %d, want 1", len(m.stashes))
+	}
+	if strings.TrimSpace(m.notice) == "" || !strings.Contains(m.gitOutput, "Saved working directory") {
+		t.Fatalf("notice=%q gitOutput=%q, want stash output preserved", m.notice, m.gitOutput)
+	}
+	if got := strings.TrimSpace(flowGit(t, dir, "status", "--short")); got != "" {
+		t.Fatalf("status after stash = %q, want clean worktree", got)
+	}
+}
+
+func TestViewerCanStashSelectedFileOnly(t *testing.T) {
+	dir := newFlowRepo(t, 0)
+	m := newFlowModel(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, "viewer.txt"), []byte("viewer\n"), 0o644); err != nil {
+		t.Fatalf("write viewer file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "other.txt"), []byte("other\n"), 0o644); err != nil {
+		t.Fatalf("write other file: %v", err)
+	}
+	m = drive(t, m, repoLoadedMsg{
+		info: m.info,
+		files: []git.FileStatus{
+			{Path: "viewer.txt", Index: '?', Worktree: '?'},
+			{Path: "other.txt", Index: '?', Worktree: '?'},
+		},
+		review: "viewer",
+		target: "viewer.txt",
+		mode:   "preview",
+	})
+
+	m = drive(t, m, key("n"))
+	if m.err != nil {
+		t.Fatalf("viewer stash returned error: %v", m.err)
+	}
+	stashes := strings.TrimSpace(flowGit(t, dir, "stash", "list"))
+	if !strings.Contains(stashes, "gitm8 stash") {
+		t.Fatalf("stash list = %q, want gitm8 stash", stashes)
+	}
+	got := strings.TrimSpace(flowGit(t, dir, "status", "--short"))
+	if strings.Contains(got, "viewer.txt") || !strings.Contains(got, "other.txt") {
+		t.Fatalf("status after selected-file stash = %q, want only other.txt remaining", got)
+	}
+	if strings.TrimSpace(m.notice) == "" || !strings.Contains(m.gitOutput, "Saved working directory") {
+		t.Fatalf("notice=%q gitOutput=%q, want stash output preserved", m.notice, m.gitOutput)
+	}
+}
+
 // drive sends one message into Update, then runs the resulting command and feeds
 // its message back, repeating until the model settles. Spinner ticks are
 // dropped so the loop terminates.

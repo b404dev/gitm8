@@ -378,6 +378,56 @@ func TestDiscardOutputCleansUntrackedFile(t *testing.T) {
 	}
 }
 
+func TestFileStatusesCollapseUntrackedDirectories(t *testing.T) {
+	ctx := context.Background()
+	dir := initTestRepo(t)
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "src", "existing.go"), []byte("existing\n"), 0o644); err != nil {
+		t.Fatalf("write src/existing.go: %v", err)
+	}
+	runTestGit(t, dir, "add", "src/existing.go")
+	runTestGit(t, dir, "commit", "-qm", "add src")
+	if err := os.MkdirAll(filepath.Join(dir, "src", "newdir"), 0o755); err != nil {
+		t.Fatalf("mkdir src/newdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "src", "newdir", "a.go"), []byte("a\n"), 0o644); err != nil {
+		t.Fatalf("write src/newdir/a.go: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "src", "new.go"), []byte("new\n"), 0o644); err != nil {
+		t.Fatalf("write src/new.go: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "assets", "icons"), 0o755); err != nil {
+		t.Fatalf("mkdir assets/icons: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "assets", "icons", "add.svg"), []byte("svg\n"), 0o644); err != nil {
+		t.Fatalf("write assets/icons/add.svg: %v", err)
+	}
+
+	statuses, err := NewRunner(dir).FileStatuses(ctx)
+	if err != nil {
+		t.Fatalf("FileStatuses() error = %v", err)
+	}
+
+	byPath := map[string]FileStatus{}
+	for _, status := range statuses {
+		byPath[status.Path] = status
+	}
+	if status, ok := byPath["src/newdir"]; !ok || !status.Directory {
+		t.Fatalf("src/newdir status = %#v, ok %v, want directory row", status, ok)
+	}
+	if status, ok := byPath["assets"]; !ok || !status.Directory {
+		t.Fatalf("assets status = %#v, ok %v, want directory row", status, ok)
+	}
+	if status, ok := byPath["src/new.go"]; !ok || status.Directory {
+		t.Fatalf("src/new.go status = %#v, ok %v, want file row", status, ok)
+	}
+	if _, ok := byPath["src/newdir/a.go"]; ok {
+		t.Fatalf("statuses include nested file under collapsed dir: %#v", statuses)
+	}
+}
+
 func TestDiscardOutputRemovesStagedNewFile(t *testing.T) {
 	ctx := context.Background()
 	dir := initTestRepo(t)

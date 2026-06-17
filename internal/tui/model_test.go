@@ -63,6 +63,26 @@ func TestFooterCanBeHidden(t *testing.T) {
 	}
 }
 
+func TestFooterIsContextSensitive(t *testing.T) {
+	branches := Model{width: 80, mode: "branches"}
+	branchFooter := branches.footer()
+	if !strings.Contains(branchFooter, "switch with changes") || !strings.Contains(branchFooter, "create") || strings.Contains(branchFooter, "stage all") {
+		t.Fatalf("branches footer = %q, want branch actions and no dashboard noise", branchFooter)
+	}
+
+	preview := Model{width: 80, mode: "preview"}
+	previewFooter := preview.footer()
+	if !strings.Contains(previewFooter, "find in file") {
+		t.Fatalf("preview footer = %q, want file-search shortcut", previewFooter)
+	}
+
+	review := Model{width: 80, mode: "review"}
+	reviewFooter := review.footer()
+	if !strings.Contains(reviewFooter, "filter files") {
+		t.Fatalf("review footer = %q, want changed-files filter shortcut", reviewFooter)
+	}
+}
+
 // TestSplashViewShowsStartupContent checks the splash screen has the expected text.
 func TestSplashViewShowsStartupContent(t *testing.T) {
 	m := Model{width: 80, height: 24, ready: true, splash: true, splashFrame: 3, splashMessage: "thinking about rebase"}
@@ -77,6 +97,58 @@ func TestBranchesViewShowsSwitchWithChangesKey(t *testing.T) {
 	got := branchesView([]string{"main"}, 0, 0, 5)
 	if !strings.Contains(got, "W to switch with changes") {
 		t.Fatalf("branchesView() = %q, want switch-with-changes hint", got)
+	}
+}
+
+func TestFilteredFilesMatchesPathsAndLabels(t *testing.T) {
+	m := Model{
+		files: []git.FileStatus{
+			{Path: "cmd/main.go", Index: 'M', Worktree: ' '},
+			{Path: "docs/guide.md", Index: ' ', Worktree: 'M'},
+			{Path: "old.txt", OldPath: "renamed.txt", Index: 'R', Worktree: ' '},
+		},
+	}
+
+	if got := m.filteredFiles(); len(got) != 3 {
+		t.Fatalf("filteredFiles() without query = %d, want 3", len(got))
+	}
+
+	m.fileFilter.SetValue("guide")
+	got := m.filteredFiles()
+	if len(got) != 1 || got[0].Path != "docs/guide.md" {
+		t.Fatalf("filteredFiles() = %#v, want docs/guide.md", got)
+	}
+
+	m.fileFilter.SetValue("ren*")
+	got = m.filteredFiles()
+	if len(got) != 1 || got[0].Path != "old.txt" {
+		t.Fatalf("filteredFiles() wildcard = %#v, want renamed row", got)
+	}
+}
+
+func TestFileListNameShowsBasenameOnly(t *testing.T) {
+	cases := []struct {
+		file git.FileStatus
+		want string
+	}{
+		{file: git.FileStatus{Path: "cmd/main.go"}, want: "main.go"},
+		{file: git.FileStatus{Path: "assets/icons", Directory: true}, want: "icons/"},
+		{file: git.FileStatus{Path: "new.txt", OldPath: "old.txt"}, want: "old.txt -> new.txt"},
+	}
+	for _, tc := range cases {
+		if got := fileListName(tc.file); got != tc.want {
+			t.Fatalf("fileListName(%#v) = %q, want %q", tc.file, got, tc.want)
+		}
+	}
+}
+
+func TestOutputBarShowsSelectedFullPath(t *testing.T) {
+	m := Model{width: 120, mode: "preview", target: "src/deep/main.go"}
+	if got := m.outputBar(); !strings.Contains(got, "path src/deep/main.go") {
+		t.Fatalf("outputBar() = %q, want selected full path", got)
+	}
+	if got := m.topBar(); strings.Contains(got, "path src/deep/main.go") {
+		t.Fatalf("topBar() = %q, want path only in output bar", got)
 	}
 }
 

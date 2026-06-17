@@ -1,6 +1,9 @@
 package git
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Runner is the app's doorway to the installed git binary. The TUI calls
 // Runner methods instead of building raw git commands itself.
@@ -10,10 +13,11 @@ type Runner struct {
 
 // FileStatus is one changed-file row from `git status --porcelain`.
 type FileStatus struct {
-	Path     string
-	OldPath  string
-	Index    byte
-	Worktree byte
+	Path      string
+	OldPath   string
+	Index     byte
+	Worktree  byte
+	Directory bool
 }
 
 // Commit is one commit row used by the in-TUI squash workflow.
@@ -50,6 +54,9 @@ func (f FileStatus) Label() string {
 func (f FileStatus) DisplayPath() string {
 	if f.OldPath != "" {
 		return f.OldPath + " -> " + f.Path
+	}
+	if f.Directory {
+		return strings.TrimSuffix(f.Path, "/") + "/"
 	}
 	return f.Path
 }

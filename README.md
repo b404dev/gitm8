@@ -141,6 +141,7 @@ mode.
 | `x` | Discard all changes to selected file |
 | `s` / `S` | Stage selected file / stage all changes |
 | `u` / `U` | Unstage selected file / unstage all changes |
+| `n` | Stash selected file |
 | `c` | Commit staged changes |
 | `f` | Fetch (`--all --prune`) |
 | `p` / `P` | Pull (`--ff-only`) / push |
@@ -149,8 +150,8 @@ mode.
 | `t` | Open stash panel |
 | `b` | Open branch switcher |
 | `l` | View recent commit logs |
-| `r` / `ctrl+p` | Open pull request options |
-| `R` / `ctrl+r` | Rebase current branch onto another branch |
+| `r` | Open pull request options |
+| `R` | Rebase current branch onto another branch |
 | `i` | Switch Git identity profile |
 | `h` | Open help |
 | `o` | Expand/collapse the git output box |
@@ -185,7 +186,7 @@ branch automatically.
 
 ### Rebase
 
-In the rebase picker (`R` or `ctrl+r`), use `↑`/`↓` to choose a target branch
+In the rebase picker (`R`), use `↑`/`↓` to choose a target branch
 and `enter` to rebase the current branch onto it. You cannot rebase onto the
 current branch. If a rebase is already in progress, use `c` to continue, `a` to
 abort, or `s` to skip the current patch.
@@ -208,9 +209,10 @@ rebase controls: `c` continue, `a` abort, and `s` skip.
 
 ### Stashes
 
+Press `n` from the main viewer to stash the selected file only.
 Press `t` to open the stash panel. It lists `git stash list`, previews the
-selected stash diff, and supports `n` to stash current tracked and untracked
-changes, `a` to apply, `p` to pop, and `D` to drop.
+selected stash diff, and supports `n` to stash from there too, `a` to apply,
+`p` to pop, and `D` to drop.
 
 ### Interactive Squash
 
@@ -229,7 +231,7 @@ to retry with `git push --force-with-lease`.
 
 ### Pull Requests
 
-Press `r` or `ctrl+p` in the dashboard to open pull request options for the
+Press `r` in the dashboard to open pull request options for the
 current branch. This workflow uses the GitHub CLI (`gh`):
 
 ```sh

@@ -43,6 +43,16 @@ func (r Runner) StashPushOutput(ctx context.Context) (string, error) {
 	return r.output(ctx, "stash", "push", "-u", "-m", "gitm8 stash")
 }
 
+// StashPushPathsOutput saves current tracked and untracked changes for paths.
+func (r Runner) StashPushPathsOutput(ctx context.Context, paths ...string) (string, error) {
+	args := []string{"stash", "push", "-u", "-m", "gitm8 stash"}
+	if len(paths) > 0 {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
+	return r.output(ctx, args...)
+}
+
 // StashApplyOutput applies a stash and keeps it in the stash stack.
 func (r Runner) StashApplyOutput(ctx context.Context, ref string) (string, error) {
 	return r.output(ctx, "stash", "apply", ref)

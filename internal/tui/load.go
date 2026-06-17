@@ -143,6 +143,10 @@ func loadConflicts(runner git.Runner, cursor int) tea.Cmd {
 
 // loadStashes loads the stash stack and previews the selected stash diff.
 func loadStashes(runner git.Runner, cursor int) tea.Cmd {
+	return loadStashesWithNotice(runner, cursor, "")
+}
+
+func loadStashesWithNotice(runner git.Runner, cursor int, notice string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		info, infoErr := runner.RepoInfo(ctx)
@@ -160,6 +164,7 @@ func loadStashes(runner git.Runner, cursor int) tea.Cmd {
 			files:   files,
 			stashes: stashes,
 			review:  review,
+			notice:  notice,
 			err:     firstErr(infoErr, filesErr, stashesErr, diffErr),
 		}
 	}
@@ -200,6 +205,10 @@ func loadBranchList(runner git.Runner, mode string) tea.Cmd {
 
 // loadCurrent reloads the current screen after an action changes the repo.
 func loadCurrent(runner git.Runner, path string, mode string, graph bool) tea.Cmd {
+	return loadCurrentWithNotice(runner, path, mode, graph, "")
+}
+
+func loadCurrentWithNotice(runner git.Runner, path string, mode string, graph bool, notice string) tea.Cmd {
 	if mode == "branches" {
 		return loadBranches(runner)
 	}
@@ -219,7 +228,23 @@ func loadCurrent(runner git.Runner, path string, mode string, graph bool) tea.Cm
 		return loadLog(runner, graph)
 	}
 	if mode == "preview" && path != "" {
-		return loadPreview(runner, path)
+		return loadPreviewWithNotice(runner, path, notice)
 	}
-	return loadReview(runner, path)
+	return loadReviewWithNotice(runner, path, notice)
+}
+
+func loadReviewWithNotice(runner git.Runner, path string, notice string) tea.Cmd {
+	return func() tea.Msg {
+		msg := loadReview(runner, path)().(repoLoadedMsg)
+		msg.notice = notice
+		return msg
+	}
+}
+
+func loadPreviewWithNotice(runner git.Runner, path string, notice string) tea.Cmd {
+	return func() tea.Msg {
+		msg := loadPreview(runner, path)().(repoLoadedMsg)
+		msg.notice = notice
+		return msg
+	}
 }

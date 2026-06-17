@@ -55,7 +55,43 @@ func (r Runner) FileStatuses(ctx context.Context) ([]FileStatus, error) {
 		return nil, err
 	}
 
-	return parseStatusZ(out), nil
+	return r.collapseUntrackedDirectories(ctx, parseStatusZ(out)), nil
+}
+
+func (r Runner) collapseUntrackedDirectories(ctx context.Context, files []FileStatus) []FileStatus {
+	collapsed := make([]FileStatus, 0, len(files))
+	seenDirs := map[string]bool{}
+	for _, file := range files {
+		if file.Index == '?' {
+			if dir, ok := r.untrackedDirectoryPrefix(ctx, file.Path); ok {
+				if !seenDirs[dir] {
+					collapsed = append(collapsed, FileStatus{Path: dir, Index: '?', Worktree: '?', Directory: true})
+					seenDirs[dir] = true
+				}
+				continue
+			}
+		}
+		collapsed = append(collapsed, file)
+	}
+	return collapsed
+}
+
+func (r Runner) untrackedDirectoryPrefix(ctx context.Context, filePath string) (string, bool) {
+	parts := strings.Split(strings.Trim(filePath, "/"), "/")
+	if len(parts) < 2 {
+		return "", false
+	}
+	for i := 1; i < len(parts); i++ {
+		prefix := strings.Join(parts[:i], "/")
+		stat, err := os.Stat(r.workingPath(prefix))
+		if err != nil || !stat.IsDir() {
+			continue
+		}
+		if strings.TrimSpace(r.bestEffort(ctx, "ls-files", "--", prefix)) == "" {
+			return prefix, true
+		}
+	}
+	return "", false
 }
 
 func parseStatusZ(out string) []FileStatus {
