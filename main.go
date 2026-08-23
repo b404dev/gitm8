@@ -48,7 +48,7 @@ func main() {
 		}
 	}
 
-	program := tea.NewProgram(tui.New(runner, cfg), tea.WithAltScreen())
+	program := tea.NewProgram(tui.New(runner, cfg), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := program.Run(); err != nil {
 		logging.Error("main", "main", "program_failed", logging.F("error", err))
 		fmt.Fprintln(os.Stderr, err)

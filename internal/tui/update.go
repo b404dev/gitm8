@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -51,6 +52,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+	case progress.FrameMsg:
+		model, cmd := m.releaseProgress.Update(msg)
+		m.releaseProgress = model.(progress.Model)
+		return m, cmd
+	case tea.MouseMsg:
+		return m.updateMouse(msg)
 	case gitActionFinishedMsg:
 		return m.handleGitActionFinished(msg)
 	case pushFinishedMsg:
@@ -74,10 +81,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		if msg.err != nil {
 			m.gitOutput = msg.err.Error()
+			m.toast, m.toastError = msg.err.Error(), true
 			m.releaseInputs[m.releaseInput].Focus()
 			return m, nil
 		}
 		m.gitOutput, m.notice = msg.output, msg.output
+		m.toast, m.toastError = "Release published", false
 		m.mode = "releases"
 		return m, loadReleases(m.runner)
 	case releaseDetailLoadedMsg:
@@ -173,6 +182,12 @@ func (m Model) updateFocusedMode(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "search":
 		next, cmd := m.updateSearch(msg)
 		return next, cmd, true
+	case "command-palette":
+		next, cmd := m.updateCommandPalette(msg)
+		return next, cmd, true
+	case "themes":
+		next, cmd := m.updateThemes(msg)
+		return next, cmd, true
 	case "releases":
 		next, cmd := m.updateReleases(msg)
 		return next, cmd, true
@@ -191,6 +206,10 @@ func (m Model) updateFocusedMode(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	logging.Info("tui", "updateDashboardKey", "key_pressed", logging.F("key", msg.String()), logging.F("mode", m.mode), logging.F("target", m.target))
 	switch msg.String() {
+	case ":", "ctrl+k":
+		return m.openCommandPalette()
+	case "T":
+		return m.openThemes()
 	case "w":
 		return m.openWorkspace()
 	case "v":
@@ -624,12 +643,14 @@ func (m Model) handleGitActionFinished(msg gitActionFinishedMsg) (tea.Model, tea
 		logging.Error("tui", "handleGitActionFinished", "action_failed", logging.F("error", msg.err))
 		m.notice = ""
 		m.gitOutput = msg.err.Error()
+		m.toast, m.toastError = msg.err.Error(), true
 		return m, nil
 	}
 
 	logging.Info("tui", "handleGitActionFinished", "action_complete", logging.F("refresh", msg.refresh), logging.F("output_bytes", len(msg.output)))
 	m.notice = msg.output
 	m.gitOutput = msg.output
+	m.toast, m.toastError = msg.output, false
 	if m.mode == "branches" {
 		return m, loadBranches(m.runner)
 	}
@@ -657,6 +678,7 @@ func (m Model) handlePushFinished(msg pushFinishedMsg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.gitOutput = msg.err.Error()
 		m.notice = ""
+		m.toast, m.toastError = msg.err.Error(), true
 		if msg.rejected {
 			m.mode = "force-push"
 			m.notice = "Push rejected — remote history differs (expected after a squash). Force push?"
@@ -670,6 +692,7 @@ func (m Model) handlePushFinished(msg pushFinishedMsg) (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.notice = msg.output
 	m.gitOutput = msg.output
+	m.toast, m.toastError = msg.output, false
 	logging.Info("tui", "handlePushFinished", "push_complete")
 	return m, loadCurrent(m.runner, m.selectedPath(), m.mode, m.config.ShowCommitGraph)
 }

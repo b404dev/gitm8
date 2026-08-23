@@ -156,6 +156,8 @@ mode.
 | `R` | Rebase current branch onto another branch |
 | `i` | Switch Git identity profile |
 | `h` | Open help |
+| `:` / `ctrl+k` | Open the searchable command palette |
+| `T` | Preview and switch themes inside gitm8 |
 | `o` | Expand/collapse the git output box |
 | `tab` | Hide/show the footer key bar |
 | `y` | Open `yazi` file manager, if installed |
@@ -173,6 +175,21 @@ or `ctrl+g` to toggle draft, prerelease, or GitHub-generated notes. GitHub
 creates the tag when it does not already exist. Release operations require an
 authenticated GitHub CLI (`gh`). Select a release and press `enter` to inspect
 its complete notes, author, target, URL, and downloadable assets.
+
+Release creation is a guided five-step flow: version, title, notes, publishing
+options, and final review. When releases already exist, gitm8 suggests the next
+patch version. The notes step is a multiline Markdown editor. Nothing is
+published until the review step is confirmed.
+
+### Themes and command palette
+
+Press `T` to preview every configured theme live. `enter` applies the selection
+and persists it to the gitm8 config; `esc` restores the previous theme. Press
+`:` or `ctrl+k` to search for screens and actions by name instead of memorising
+their direct keys.
+
+Trackpad and mouse-wheel navigation is enabled for lists and scrollable views;
+release rows and changed files can also be selected with a click.
 
 ### Branches
 

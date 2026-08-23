@@ -3,7 +3,9 @@ package tui
 import (
 	"context"
 
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,6 +32,7 @@ type Model struct {
 	branchInput          textinput.Model
 	fileFilter           textinput.Model
 	searchInput          textinput.Model
+	commandInput         textinput.Model
 	setupInputs          []textinput.Model
 	setupStep            int
 	setupStage           string
@@ -56,7 +59,10 @@ type Model struct {
 	releaseDetail        git.ReleaseDetail
 	releaseCursor        int
 	releaseInput         int
+	releaseStep          int
 	releaseInputs        []textinput.Model
+	releaseNotes         textarea.Model
+	releaseProgress      progress.Model
 	releaseDraft         bool
 	releasePrerelease    bool
 	releaseGenerateNotes bool
@@ -77,6 +83,11 @@ type Model struct {
 	target               string
 	mode                 string
 	helpReturn           string
+	returnMode           string
+	themeCursor          int
+	commandCursor        int
+	toast                string
+	toastError           bool
 	err                  error
 	notice               string
 	gitOutput            string
@@ -215,24 +226,43 @@ func New(runner git.Runner, cfg config.Config) Model {
 	searchInput.CharLimit = 160
 	searchInput.Prompt = "/ "
 
+	commandInput := textinput.New()
+	commandInput.Placeholder = "Type a command"
+	commandInput.CharLimit = 120
+	commandInput.Prompt = "> "
+
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = keyStyle
 
+	releaseNotes := textarea.New()
+	releaseNotes.Placeholder = "What changed in this release? Markdown is welcome."
+	releaseNotes.CharLimit = 12000
+	releaseNotes.SetWidth(64)
+	releaseNotes.SetHeight(8)
+	releaseNotes.ShowLineNumbers = false
+
+	releaseProgress := progress.New(progress.WithDefaultGradient(), progress.WithoutPercentage(), progress.WithFillCharacters('━', '─'))
+	releaseProgress.Width = 52
+	releaseProgress.SetSpringOptions(14, 0.82)
+
 	model := Model{
-		runner:        runner,
-		config:        cfg,
-		review:        viewport.New(80, 24),
-		commit:        commit,
-		branchInput:   branchInput,
-		fileFilter:    fileFilter,
-		searchInput:   searchInput,
-		spinner:       sp,
-		squashBase:    -1,
-		target:        "repo",
-		mode:          "review",
-		splash:        true,
-		splashMessage: randomSplashMessage(),
+		runner:          runner,
+		config:          cfg,
+		review:          viewport.New(80, 24),
+		commit:          commit,
+		branchInput:     branchInput,
+		fileFilter:      fileFilter,
+		searchInput:     searchInput,
+		commandInput:    commandInput,
+		spinner:         sp,
+		releaseNotes:    releaseNotes,
+		releaseProgress: releaseProgress,
+		squashBase:      -1,
+		target:          "repo",
+		mode:            "review",
+		splash:          true,
+		splashMessage:   randomSplashMessage(),
 	}
 	model.projectInput = textinput.New()
 	model.projectInput.Prompt = "> "

@@ -383,6 +383,11 @@ func DismissFirstRunSetup() error {
 	return writeSetupValues(map[string]string{"GITM8_FIRST_RUN_DISMISSED": "true"})
 }
 
+// SaveTheme persists a theme selected from inside the TUI.
+func SaveTheme(theme string) error {
+	return writeSetupValues(map[string]string{"GITM8_THEME": theme})
+}
+
 func writeSetupValues(values map[string]string) error {
 	dir := filepath.Join(homeDir(), ".gitm8")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -401,8 +406,8 @@ func writeSetupValues(values map[string]string) error {
 		}
 		kept = append(kept, line)
 	}
-	kept = append(kept, "", "# Managed by the gitm8 first-run setup wizard.")
-	for _, key := range []string{"GITM8_WORKSPACE_DIR", "GITM8_DEFAULT_BRANCH", "GITM8_EDITOR", "GITM8_FIRST_RUN_DISMISSED"} {
+	kept = append(kept, "", "# Managed by gitm8.")
+	for _, key := range []string{"GITM8_WORKSPACE_DIR", "GITM8_DEFAULT_BRANCH", "GITM8_EDITOR", "GITM8_FIRST_RUN_DISMISSED", "GITM8_THEME"} {
 		if value, ok := values[key]; ok {
 			kept = append(kept, "export "+key+"=\""+configValue(value)+"\"")
 		}

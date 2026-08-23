@@ -8,12 +8,13 @@ import (
 )
 
 var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	errorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	mutedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	keyStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
-	panelStyle  = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("240")).Padding(0, 1)
-	activeStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("229"))
+	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	mutedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	keyStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
+	panelStyle    = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("240")).Padding(0, 1)
+	activeStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("229"))
+	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229")).Background(lipgloss.Color("240"))
 
 	syntaxKeywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
 	syntaxStringStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("229"))
@@ -67,6 +68,7 @@ func applyTheme(name string) {
 	keyStyle = lipgloss.NewStyle().Bold(true).Foreground(pal.key)
 	panelStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(pal.border).Padding(0, 1)
 	activeStyle = lipgloss.NewStyle().Foreground(pal.active)
+	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(pal.active).Background(pal.border)
 	syntaxKeywordStyle = lipgloss.NewStyle().Foreground(firstColor(pal.keyword, pal.title))
 	syntaxStringStyle = lipgloss.NewStyle().Foreground(firstColor(pal.stringLit, pal.active))
 	syntaxCommentStyle = lipgloss.NewStyle().Foreground(firstColor(pal.comment, pal.muted))

@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"math/rand"
-	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +28,12 @@ func (m Model) View() string {
 	if m.mode == "help" {
 		return m.helpScreenView()
 	}
+	if m.mode == "command-palette" {
+		return m.commandPaletteView()
+	}
+	if m.mode == "themes" {
+		return m.themesView()
+	}
 	if m.splash {
 		return m.splashView()
 	}
@@ -38,11 +43,15 @@ func (m Model) View() string {
 
 	header := m.header()
 	footer := m.footer()
-	bodyHeight := max(4, m.height-lipgloss.Height(header)-lipgloss.Height(footer))
+	feedback := m.feedbackBar()
+	bodyHeight := max(4, m.height-lipgloss.Height(header)-lipgloss.Height(feedback)-lipgloss.Height(footer))
 	m.resizeReviewForHeight(bodyHeight)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, m.filesPanel(bodyHeight), m.reviewPanel(bodyHeight))
+	if m.width < 76 {
+		body = m.reviewPanel(bodyHeight)
+	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, feedback, footer)
 }
 
 // Layout Sizing
@@ -55,6 +64,9 @@ func (m *Model) resizeReview() {
 // resizeReviewForHeight sizes the viewport within the current body height.
 func (m *Model) resizeReviewForHeight(height int) {
 	reviewWidth := max(20, m.width-m.filesWidth()-4)
+	if m.width < 76 {
+		reviewWidth = max(20, m.width-4)
+	}
 	m.review.Width = reviewWidth - 4
 	m.review.Height = max(1, height-3)
 }
@@ -196,24 +208,41 @@ func (m Model) topBar() string {
 	if m.info.LastPullSet {
 		lastPull = m.info.LastPull.Format("Jan 02 15:04")
 	}
-	sync := fmt.Sprintf("+%d/-%d", m.info.Ahead, m.info.Behind)
+	sync := "SYNCED"
+	if m.info.Ahead > 0 || m.info.Behind > 0 {
+		sync = fmt.Sprintf("AHEAD %d  BEHIND %d", m.info.Ahead, m.info.Behind)
+	}
+	state := "CLEAN"
+	if m.info.Staged > 0 || m.info.Unstaged > 0 {
+		state = fmt.Sprintf("CHANGES %d", m.info.Staged+m.info.Unstaged)
+	}
 	repo := m.info.Repo
 	if repo == "" {
 		repo = "no repo"
 	}
 	items := []string{
-		titleStyle.Render("gitm8"),
-		keyStyle.Render("repo ") + repo,
-		keyStyle.Render("branch ") + m.info.Branch,
-		keyStyle.Render("user ") + m.info.User,
-		keyStyle.Render("upstream ") + upstream,
-		keyStyle.Render("sync ") + sync,
-		keyStyle.Render("staged ") + strconv.Itoa(m.info.Staged),
-		keyStyle.Render("unstaged ") + strconv.Itoa(m.info.Unstaged),
-		keyStyle.Render("last pull ") + lastPull,
-		keyStyle.Render("viewer ") + m.mode,
+		titleStyle.Render("GITM8"), keyStyle.Render("// " + strings.ToUpper(viewerTitle(m.mode))),
+		activeStyle.Render(repo), mutedStyle.Render("@ " + m.info.Branch),
+		keyStyle.Render(state), keyStyle.Render(sync),
+	}
+	if m.width >= 110 {
+		items = append(items, mutedStyle.Render(upstream), mutedStyle.Render("pull "+lastPull), mutedStyle.Render(m.info.User))
 	}
 	return panelStyle.Width(m.panelWidth()).Render(strings.Join(items, "  "))
+}
+
+func (m Model) feedbackBar() string {
+	if strings.TrimSpace(m.toast) == "" {
+		return ""
+	}
+	style, badge := activeStyle, "✓"
+	if m.loading {
+		badge = m.spinner.View()
+	}
+	if m.toastError {
+		style, badge = errorStyle, "!"
+	}
+	return panelStyle.Width(m.panelWidth()).Render(style.Copy().Bold(true).Render(badge+" ") + trimMiddle(strings.TrimSpace(m.toast), max(20, m.width-10)))
 }
 
 // Body Panels
@@ -235,11 +264,16 @@ func (m Model) filesPanelWithRows(height int, files []git.FileStatus) string {
 		pointer := "  "
 		style := lipgloss.NewStyle()
 		if i == m.fileCursor {
-			style = activeStyle
-			pointer = keyStyle.Render("> ")
+			style = selectedStyle.Width(max(8, width-5))
+			pointer = "▸ "
 		}
 		badge := statusBadge(file)
-		lines = append(lines, pointer+badge+" "+style.Render(trimMiddle(fileListName(file), width-9)))
+		row := pointer + badge + " " + trimMiddle(fileListName(file), width-9)
+		if i == m.fileCursor {
+			lines = append(lines, style.Render(row))
+		} else {
+			lines = append(lines, row)
+		}
 	}
 	if len(m.files) == 0 {
 		lines = append(lines, mutedStyle.Render("No changed files"))
@@ -256,6 +290,9 @@ func (m Model) filesPanelWithRows(height int, files []git.FileStatus) string {
 // reviewPanel renders the active viewer title and viewport content.
 func (m Model) reviewPanel(height int) string {
 	reviewWidth := max(20, m.width-m.filesWidth()-4)
+	if m.width < 76 {
+		reviewWidth = max(20, m.width-4)
+	}
 	reviewHeight := max(1, height-2)
 	title := titleStyle.Render(viewerTitle(m.mode))
 	return panelStyle.Width(reviewWidth).Height(reviewHeight).Render(title + "\n" + m.review.View())
@@ -434,15 +471,16 @@ func (m Model) footerRows() []string {
 		if m.mode == "preview" {
 			filterLabel = "find in file"
 		}
-		return []string{strings.Join([]string{
+		items := []string{
 			keyStyle.Render("[h]") + " all keys",
 			keyStyle.Render("[↑/↓]") + " files",
-			keyStyle.Render("[enter]") + " edit",
 			keyStyle.Render("[/]") + " " + filterLabel,
-			keyStyle.Render("[c]") + " commit",
-			keyStyle.Render("[P]") + " push",
 			keyStyle.Render("[q]") + " quit",
-		}, "  ")}
+		}
+		if m.width >= 96 {
+			items = []string{keyStyle.Render("[h]") + " all keys", keyStyle.Render("[↑/↓]") + " files", keyStyle.Render("[enter]") + " edit", keyStyle.Render("[/]") + " " + filterLabel, keyStyle.Render("[c]") + " commit", keyStyle.Render("[P]") + " push", keyStyle.Render("[q]") + " quit"}
+		}
+		return []string{strings.Join(items, "  ")}
 	}
 }
 
@@ -771,6 +809,8 @@ func (m Model) helpView() string {
 		{"i", "identity switcher (git user profiles)"},
 		{"r", "pull request options"},
 		{"v", "list and create GitHub releases"},
+		{": / ctrl+k", "searchable command palette"},
+		{"T", "preview and switch themes"},
 		{"R", "rebase the current branch onto another"},
 		{"h", "this help"},
 		{"o", "expand or collapse the git output box"},

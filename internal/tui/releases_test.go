@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/b404dev/gitm8/internal/git"
@@ -41,9 +43,31 @@ func TestEnterLoadsSelectedReleaseDetails(t *testing.T) {
 }
 
 func TestReleaseCreateRequiresTag(t *testing.T) {
-	m := Model{mode: "release-create", releaseInputs: newReleaseInputs()}
+	m := Model{mode: "release-create", releaseInputs: newReleaseInputs(), releaseNotes: textarea.New(), releaseProgress: progress.New()}
 	next, _ := m.updateReleaseCreate(tea.KeyMsg{Type: tea.KeyEnter})
 	if next.(Model).err == nil {
 		t.Fatal("empty release tag was accepted")
+	}
+}
+
+func TestSuggestNextReleaseTag(t *testing.T) {
+	if got := suggestNextReleaseTag("v2.7.9"); got != "v2.7.10" {
+		t.Fatalf("suggestNextReleaseTag() = %q, want v2.7.10", got)
+	}
+}
+
+func TestReleaseCreateAdvancesToReviewBeforePublishing(t *testing.T) {
+	m := Model{mode: "release-create", releaseInputs: newReleaseInputs(), releaseNotes: textarea.New(), releaseProgress: progress.New()}
+	m.releaseInputs[0].SetValue("v3.0.0")
+	for step := 1; step <= 4; step++ {
+		key := tea.KeyMsg{Type: tea.KeyEnter}
+		if m.releaseStep == 2 {
+			key = tea.KeyMsg{Type: tea.KeyTab}
+		}
+		next, cmd := m.updateReleaseCreate(key)
+		m = next.(Model)
+		if cmd == nil || m.releaseStep != step {
+			t.Fatalf("enter at step %d produced step=%d cmd=%v", step-1, m.releaseStep, cmd)
+		}
 	}
 }

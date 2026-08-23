@@ -123,10 +123,7 @@ func (m Model) handleProjectOpened(msg projectOpenedMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) workspaceView() string {
 	contentWidth := max(40, m.width-4)
-	header := panelStyle.Width(contentWidth).Render(strings.Join([]string{
-		titleStyle.Render("gitm8") + "  " + keyStyle.Render("WORKSPACE"),
-		mutedStyle.Render("Choose where you want to work"),
-	}, "\n"))
+	header := brandHeader(contentWidth, "WORKSPACE", "Choose where you want to work")
 
 	if m.projectAction != "" {
 		var b strings.Builder

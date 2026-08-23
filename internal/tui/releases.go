@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -52,16 +54,26 @@ func createRelease(runner git.Runner, tag, title, notes string, draft, prereleas
 
 func (m Model) updateReleases(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case ":", "ctrl+k":
+		return m.openCommandPalette()
+	case "T":
+		return m.openThemes()
 	case "esc":
 		m.mode = "review"
 		return m, loadReview(m.runner, "")
 	case "n":
 		m.mode = "release-create"
 		m.releaseInput = 0
+		m.releaseStep = 0
 		m.releaseDraft, m.releasePrerelease, m.releaseGenerateNotes = false, false, false
 		for i := range m.releaseInputs {
 			m.releaseInputs[i].SetValue("")
 			m.releaseInputs[i].Blur()
+		}
+		m.releaseNotes.Reset()
+		m.releaseProgress.SetPercent(0)
+		if len(m.releases) > 0 {
+			m.releaseInputs[0].SetValue(suggestNextReleaseTag(m.releases[0].Tag))
 		}
 		m.releaseInputs[0].Focus()
 		m.err, m.notice = nil, ""
@@ -93,6 +105,10 @@ func (m Model) updateReleases(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateReleaseDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case ":", "ctrl+k":
+		return m.openCommandPalette()
+	case "T":
+		return m.openThemes()
 	case "esc":
 		m.mode = "releases"
 		m.err = nil
@@ -119,18 +135,27 @@ func (m Model) updateReleaseCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch key {
 	case "esc":
+		if m.releaseStep > 0 {
+			m.releaseStep--
+			m.focusReleaseStep()
+			return m, m.releaseProgress.SetPercent(float64(m.releaseStep) / 4)
+		}
 		m.releaseInputs[m.releaseInput].Blur()
 		m.mode = "releases"
 		return m, nil
 	case "tab", "down":
-		m.releaseInputs[m.releaseInput].Blur()
-		m.releaseInput = (m.releaseInput + 1) % len(m.releaseInputs)
-		m.releaseInputs[m.releaseInput].Focus()
+		if m.releaseStep < 4 {
+			m.releaseStep++
+			m.focusReleaseStep()
+			return m, m.releaseProgress.SetPercent(float64(m.releaseStep) / 4)
+		}
 		return m, nil
 	case "shift+tab", "up":
-		m.releaseInputs[m.releaseInput].Blur()
-		m.releaseInput = (m.releaseInput - 1 + len(m.releaseInputs)) % len(m.releaseInputs)
-		m.releaseInputs[m.releaseInput].Focus()
+		if m.releaseStep > 0 {
+			m.releaseStep--
+			m.focusReleaseStep()
+			return m, m.releaseProgress.SetPercent(float64(m.releaseStep) / 4)
+		}
 		return m, nil
 	case "ctrl+d":
 		m.releaseDraft = !m.releaseDraft
@@ -142,16 +167,35 @@ func (m Model) updateReleaseCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.releaseGenerateNotes = !m.releaseGenerateNotes
 		return m, nil
 	case "enter":
+		if m.releaseStep == 2 {
+			var cmd tea.Cmd
+			m.releaseNotes, cmd = m.releaseNotes.Update(msg)
+			return m, cmd
+		}
 		if strings.TrimSpace(m.releaseInputs[0].Value()) == "" {
 			m.err = fmt.Errorf("a release tag is required")
 			return m, nil
+		}
+		if m.releaseStep < 4 {
+			m.releaseStep++
+			m.focusReleaseStep()
+			return m, m.releaseProgress.SetPercent(float64(m.releaseStep) / 4)
 		}
 		for i := range m.releaseInputs {
 			m.releaseInputs[i].Blur()
 		}
 		m.loading = true
 		m.gitOutput = "Creating GitHub release..."
-		return m, tea.Batch(createRelease(m.runner, m.releaseInputs[0].Value(), m.releaseInputs[1].Value(), m.releaseInputs[2].Value(), m.releaseDraft, m.releasePrerelease, m.releaseGenerateNotes), m.spinner.Tick)
+		return m, tea.Batch(createRelease(m.runner, m.releaseInputs[0].Value(), m.releaseInputs[1].Value(), m.releaseNotes.Value(), m.releaseDraft, m.releasePrerelease, m.releaseGenerateNotes), m.spinner.Tick)
+	}
+	if m.releaseStep == 2 {
+		var cmd tea.Cmd
+		m.err = nil
+		m.releaseNotes, cmd = m.releaseNotes.Update(msg)
+		return m, cmd
+	}
+	if m.releaseStep >= len(m.releaseInputs) {
+		return m, nil
 	}
 	var cmd tea.Cmd
 	m.err = nil
@@ -159,12 +203,38 @@ func (m Model) updateReleaseCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m *Model) focusReleaseStep() {
+	for i := range m.releaseInputs {
+		m.releaseInputs[i].Blur()
+	}
+	m.releaseNotes.Blur()
+	if m.releaseStep < len(m.releaseInputs) {
+		if m.releaseStep == 2 {
+			m.releaseNotes.Focus()
+		} else {
+			m.releaseInput = m.releaseStep
+			m.releaseInputs[m.releaseInput].Focus()
+		}
+	}
+}
+
+var semanticTagPattern = regexp.MustCompile(`^(.*?)(\d+)\.(\d+)\.(\d+)(.*)$`)
+
+func suggestNextReleaseTag(current string) string {
+	parts := semanticTagPattern.FindStringSubmatch(strings.TrimSpace(current))
+	if len(parts) != 6 {
+		return ""
+	}
+	patch, err := strconv.Atoi(parts[4])
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s%s.%s.%d", parts[1], parts[2], parts[3], patch+1)
+}
+
 func (m Model) releasesScreenView() string {
 	contentWidth := max(40, m.width-4)
-	header := panelStyle.Width(contentWidth).Render(strings.Join([]string{
-		titleStyle.Render("gitm8") + "  " + keyStyle.Render("RELEASES"),
-		mutedStyle.Render("Publish and inspect GitHub releases"),
-	}, "\n"))
+	header := brandHeader(contentWidth, "RELEASES", "Publish and inspect GitHub releases")
 	if m.mode == "release-create" {
 		bodyHeight := max(12, m.height-lipgloss.Height(header)-2)
 		card := m.releaseCreateCard(clamp(contentWidth-10, 44, 78))
@@ -255,10 +325,15 @@ func (m Model) releasesListPanel(width, height int) string {
 			release := m.releases[i]
 			marker, style := "  ", mutedStyle
 			if i == m.releaseCursor {
-				marker, style = keyStyle.Render("▸ "), activeStyle.Copy().Bold(true)
+				marker, style = "▸ ", selectedStyle.Width(max(8, width-4))
 			}
 			state := releaseState(release)
-			lines = append(lines, marker+style.Render(trimMiddle(release.Tag, max(8, width-19)))+"  "+releaseStateStyle(release).Render(state))
+			row := marker + trimMiddle(release.Tag, max(8, width-19)) + "  " + state
+			if i == m.releaseCursor {
+				lines = append(lines, style.Render(row))
+			} else {
+				lines = append(lines, row)
+			}
 		}
 		if len(m.releases) > maxRows {
 			lines = append(lines, "", mutedStyle.Render(fmt.Sprintf("showing %d-%d of %d", start+1, end, len(m.releases))))
@@ -318,34 +393,96 @@ func releaseStateStyle(release git.Release) lipgloss.Style {
 }
 
 func (m Model) releaseCreateCard(width int) string {
-	labels := []string{"Tag", "Title", "Notes"}
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Create GitHub release") + "\n")
-	b.WriteString(mutedStyle.Render("Use an existing tag or enter a new one.") + "\n\n")
-	for i, input := range m.releaseInputs {
-		label := mutedStyle.Render(labels[i])
-		if i == m.releaseInput {
-			label = keyStyle.Render("▸ " + labels[i])
+	steps := []string{"VERSION", "TITLE", "NOTES", "OPTIONS", "REVIEW"}
+	progress := make([]string, 0, len(steps))
+	for i, step := range steps {
+		switch {
+		case i == m.releaseStep:
+			progress = append(progress, keyStyle.Render("● "+step))
+		case i < m.releaseStep:
+			progress = append(progress, activeStyle.Render("✓ "+step))
+		default:
+			progress = append(progress, mutedStyle.Render("○ "+step))
 		}
-		fmt.Fprintf(&b, "%s\n%s\n\n", label, input.View())
 	}
-	mark := func(v bool) string {
-		if v {
-			return "[x]"
+	b.WriteString(strings.Join(progress, "  ") + "\n\n")
+	m.releaseProgress.Width = clamp(width-8, 24, 58)
+	b.WriteString(m.releaseProgress.View() + "\n\n")
+	switch m.releaseStep {
+	case 0:
+		b.WriteString(titleStyle.Render("Choose a version") + "\n" + mutedStyle.Render("Use an existing tag or publish a new one.") + "\n\n" + m.releaseInputs[0].View() + "\n")
+	case 1:
+		b.WriteString(titleStyle.Render("Name the release") + "\n" + mutedStyle.Render("Leave blank to use the tag as its title.") + "\n\n" + m.releaseInputs[1].View() + "\n")
+	case 2:
+		m.releaseNotes.SetWidth(max(30, width-8))
+		m.releaseNotes.SetHeight(clamp(m.height/3, 5, 10))
+		b.WriteString(titleStyle.Render("Write release notes") + "\n" + mutedStyle.Render("Markdown, paragraphs, and pasted changelogs are welcome.") + "\n\n" + m.releaseNotes.View() + "\n")
+	case 3:
+		b.WriteString(titleStyle.Render("Publishing options") + "\n\n")
+		b.WriteString(optionRow(m.releaseDraft, "ctrl+d", "Draft", "Keep private until ready") + "\n")
+		b.WriteString(optionRow(m.releasePrerelease, "ctrl+p", "Prerelease", "Mark as unstable") + "\n")
+		b.WriteString(optionRow(m.releaseGenerateNotes, "ctrl+g", "Generated notes", "Build notes from merged work") + "\n")
+	case 4:
+		title := strings.TrimSpace(m.releaseInputs[1].Value())
+		if title == "" {
+			title = strings.TrimSpace(m.releaseInputs[0].Value())
 		}
-		return "[ ]"
+		b.WriteString(titleStyle.Render("Ready to publish") + "\n\n")
+		fmt.Fprintf(&b, "%s  %s\n%s  %s\n%s  %s\n", keyStyle.Render("TAG"), m.releaseInputs[0].Value(), keyStyle.Render("TITLE"), title, keyStyle.Render("STATUS"), releaseReviewStatus(m))
+		notes := strings.TrimSpace(m.releaseNotes.Value())
+		if notes == "" {
+			notes = "No manual notes"
+		}
+		b.WriteString("\n" + keyStyle.Render("NOTES") + "\n" + mutedStyle.Render(trimMiddle(notes, max(20, width-8))) + "\n")
 	}
-	fmt.Fprintf(&b, "%s draft (ctrl+d)  %s prerelease (ctrl+p)  %s generated notes (ctrl+g)\n\n", mark(m.releaseDraft), mark(m.releasePrerelease), mark(m.releaseGenerateNotes))
 	if m.loading {
 		b.WriteString(keyStyle.Render("Creating GitHub release...") + "\n\n")
 	} else if m.err != nil {
 		b.WriteString(errorStyle.Render(m.err.Error()) + "\n\n")
 	}
-	b.WriteString(keyStyle.Render("enter") + mutedStyle.Render(" create") + "    " + keyStyle.Render("esc") + mutedStyle.Render(" cancel"))
+	action := "continue"
+	if m.releaseStep == 4 {
+		action = "publish"
+	}
+	if m.releaseStep == 2 {
+		b.WriteString("\n" + keyStyle.Render("enter") + mutedStyle.Render(" newline") + "    " + keyStyle.Render("tab") + mutedStyle.Render(" continue") + "    " + keyStyle.Render("esc") + mutedStyle.Render(" back"))
+	} else {
+		b.WriteString("\n" + keyStyle.Render("enter") + mutedStyle.Render(" "+action) + "    " + keyStyle.Render("esc") + mutedStyle.Render(" back"))
+	}
 	return panelStyle.Width(width).Padding(1, 2).Render(b.String())
 }
 
+func optionRow(enabled bool, key, label, description string) string {
+	mark := mutedStyle.Render("○")
+	if enabled {
+		mark = activeStyle.Render("●")
+	}
+	return fmt.Sprintf("%s  %-14s %-18s %s", mark, keyStyle.Render(key), label, mutedStyle.Render(description))
+}
+
+func releaseReviewStatus(m Model) string {
+	var states []string
+	if m.releaseDraft {
+		states = append(states, "draft")
+	}
+	if m.releasePrerelease {
+		states = append(states, "prerelease")
+	}
+	if m.releaseGenerateNotes {
+		states = append(states, "generated notes")
+	}
+	if len(states) == 0 {
+		return "published"
+	}
+	return strings.Join(states, ", ")
+}
+
 func (m Model) releasesFooter() string {
-	items := []string{keyStyle.Render("[h]") + " all keys", keyStyle.Render("[↑/↓]") + " choose", keyStyle.Render("[enter]") + " details", keyStyle.Render("[n]") + " create", keyStyle.Render("[esc]") + " back", keyStyle.Render("[q]") + " quit"}
+	items := []string{keyStyle.Render("[h]") + " keys", keyStyle.Render("[↑/↓]") + " choose", keyStyle.Render("[enter]") + " details", keyStyle.Render("[esc]") + " back"}
+	if m.width >= 96 {
+		items = []string{keyStyle.Render("[h]") + " all keys", keyStyle.Render("[↑/↓]") + " choose", keyStyle.Render("[enter]") + " details", keyStyle.Render("[n]") + " create", keyStyle.Render("[esc]") + " back", keyStyle.Render("[q]") + " quit"}
+	}
 	return mutedStyle.Width(max(20, m.width)).Render(strings.Join(items, "  "))
 }
