@@ -158,6 +158,7 @@ mode.
 | `h` | Open help |
 | `:` / `ctrl+k` | Open the searchable command palette |
 | `T` | Preview and switch themes inside gitm8 |
+| `F` | Toggle the focused file reader while previewing a file |
 | `o` | Expand/collapse the git output box |
 | `tab` | Hide/show the footer key bar |
 | `y` | Open `yazi` file manager, if installed |
@@ -190,6 +191,11 @@ their direct keys.
 
 Trackpad and mouse-wheel navigation is enabled for lists and scrollable views;
 release rows and changed files can also be selected with a click.
+
+File previews use the pure-Go Chroma lexer engine for language-aware,
+true-colour syntax highlighting. Highlight styles follow the active gitm8 theme
+and support multiline constructs, templates, JSX/TSX, Markdown, configuration
+formats, and unfamiliar languages detected from their contents.
 
 ### Branches
 

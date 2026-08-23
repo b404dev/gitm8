@@ -126,6 +126,9 @@ func (m Model) updateThemes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		applyTheme(m.config.Theme)
 		m.mode = m.returnMode
+		if m.mode == "preview" {
+			m.review.SetContent(highlightPreview(m.target, m.viewerContent))
+		}
 		return m, nil
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -142,6 +145,9 @@ func (m Model) updateThemes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.config.Theme = name
 		m.toast, m.toastError = "Theme saved: "+name, false
 		m.mode = m.returnMode
+		if m.mode == "preview" {
+			m.review.SetContent(highlightPreview(m.target, m.viewerContent))
+		}
 		return m, nil
 	}
 	applyTheme(names[m.themeCursor])

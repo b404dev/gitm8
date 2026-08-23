@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,6 +35,9 @@ func (m Model) View() string {
 	if m.mode == "themes" {
 		return m.themesView()
 	}
+	if m.mode == "preview" && m.readerFocus {
+		return m.focusedReaderView()
+	}
 	if m.splash {
 		return m.splashView()
 	}
@@ -46,8 +50,8 @@ func (m Model) View() string {
 	feedback := m.feedbackBar()
 	bodyHeight := max(4, m.height-lipgloss.Height(header)-lipgloss.Height(feedback)-lipgloss.Height(footer))
 	m.resizeReviewForHeight(bodyHeight)
-	body := lipgloss.JoinHorizontal(lipgloss.Top, m.filesPanel(bodyHeight), m.reviewPanel(bodyHeight))
-	if m.width < 76 {
+	body := lipgloss.JoinHorizontal(lipgloss.Top, m.filesPanel(bodyHeight), " ", m.reviewPanel(bodyHeight))
+	if m.width < 76 || (m.mode == "preview" && m.readerFocus) {
 		body = m.reviewPanel(bodyHeight)
 	}
 
@@ -63,8 +67,8 @@ func (m *Model) resizeReview() {
 
 // resizeReviewForHeight sizes the viewport within the current body height.
 func (m *Model) resizeReviewForHeight(height int) {
-	reviewWidth := max(20, m.width-m.filesWidth()-4)
-	if m.width < 76 {
+	reviewWidth := max(20, m.width-m.filesWidth()-5)
+	if m.width < 76 || (m.mode == "preview" && m.readerFocus) {
 		reviewWidth = max(20, m.width-4)
 	}
 	m.review.Width = reviewWidth - 4
@@ -289,13 +293,88 @@ func (m Model) filesPanelWithRows(height int, files []git.FileStatus) string {
 
 // reviewPanel renders the active viewer title and viewport content.
 func (m Model) reviewPanel(height int) string {
-	reviewWidth := max(20, m.width-m.filesWidth()-4)
-	if m.width < 76 {
+	reviewWidth := max(20, m.width-m.filesWidth()-5)
+	if m.width < 76 || (m.mode == "preview" && m.readerFocus) {
 		reviewWidth = max(20, m.width-4)
 	}
 	reviewHeight := max(1, height-2)
-	title := titleStyle.Render(viewerTitle(m.mode))
-	return panelStyle.Width(reviewWidth).Height(reviewHeight).Render(title + "\n" + m.review.View())
+	if m.mode == "preview" {
+		meta := m.fileReaderHeader(reviewWidth)
+		readerHeight := max(1, reviewHeight-lipgloss.Height(meta)-1)
+		m.review.Width = max(12, reviewWidth-8)
+		m.review.Height = readerHeight
+		reader := lipgloss.JoinHorizontal(lipgloss.Top, m.review.View(), " ", m.readerRail(readerHeight))
+		return activePanelStyle.Width(reviewWidth).Height(reviewHeight).Render(meta + "\n" + reader)
+	}
+	title := titleStyle.Render("◆ " + viewerTitle(m.mode))
+	return activePanelStyle.Width(reviewWidth).Height(reviewHeight).Render(title + "\n" + m.review.View())
+}
+
+func (m Model) fileReaderHeader(width int) string {
+	path := m.target
+	if path == "" {
+		path = "file"
+	}
+	crumb := strings.ReplaceAll(trimMiddle(path, max(20, width-4)), "/", mutedStyle.Render("  ›  "))
+	lines := 0
+	if m.viewerContent != "" {
+		lines = strings.Count(strings.TrimSuffix(m.viewerContent, "\n"), "\n") + 1
+	}
+	status := "tracked"
+	if file, ok := m.selectedFile(); ok {
+		status = strings.TrimSpace(file.Label())
+		if status == "" {
+			status = "tracked"
+		}
+	}
+	language := fileLanguage(path)
+	mode := "SPLIT"
+	if m.readerFocus {
+		mode = "FOCUS"
+	}
+	metadataItems := []string{keyStyle.Render(strings.ToUpper(language)), mutedStyle.Render(fmt.Sprintf("%d lines", lines)), mutedStyle.Render(humanBytes(int64(len(m.viewerContent)))), activeStyle.Render(status), keyStyle.Render(mode)}
+	if width < 66 {
+		metadataItems = []string{keyStyle.Render(strings.ToUpper(language)), mutedStyle.Render(fmt.Sprintf("%dL", lines)), keyStyle.Render(mode)}
+	}
+	metadata := strings.Join(metadataItems, "  •  ")
+	return titleStyle.Render("◇ "+crumb) + "\n" + metadata
+}
+
+func (m Model) focusedReaderView() string {
+	repo := m.info.Repo
+	if repo == "" {
+		repo = "repository"
+	}
+	top := " " + titleStyle.Render("GITM8") + "  " + keyStyle.Render("// READER") + "  " + mutedStyle.Render(repo+"  @ "+m.info.Branch)
+	footer := mutedStyle.Width(max(20, m.width)).Render(strings.Join([]string{keyStyle.Render("[F]") + " split view", keyStyle.Render("[/]") + " find", keyStyle.Render("[j/k]") + " read", keyStyle.Render("[enter]") + " edit", keyStyle.Render("[q]") + " quit"}, "  "))
+	bodyHeight := max(8, m.height-lipgloss.Height(top)-lipgloss.Height(footer)-1)
+	body := m.reviewPanel(bodyHeight)
+	return lipgloss.JoinVertical(lipgloss.Left, top, body, footer)
+}
+
+func fileLanguage(path string) string {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
+	names := map[string]string{"go": "Go", "js": "JavaScript", "ts": "TypeScript", "tsx": "TypeScript React", "jsx": "React", "md": "Markdown", "rs": "Rust", "py": "Python", "rb": "Ruby", "sh": "Shell", "yaml": "YAML", "yml": "YAML", "json": "JSON", "toml": "TOML", "css": "CSS", "html": "HTML"}
+	if name := names[ext]; name != "" {
+		return name
+	}
+	if ext == "" {
+		return "Text"
+	}
+	return strings.ToUpper(ext)
+}
+
+func (m Model) readerRail(height int) string {
+	if height <= 0 {
+		return ""
+	}
+	position := clamp(int(m.review.ScrollPercent()*float64(height-1)), 0, height-1)
+	rows := make([]string, height)
+	for i := range rows {
+		rows[i] = mutedStyle.Render("│")
+	}
+	rows[position] = keyStyle.Render("┃")
+	return strings.Join(rows, "\n")
 }
 
 // Footer
@@ -478,7 +557,7 @@ func (m Model) footerRows() []string {
 			keyStyle.Render("[q]") + " quit",
 		}
 		if m.width >= 96 {
-			items = []string{keyStyle.Render("[h]") + " all keys", keyStyle.Render("[↑/↓]") + " files", keyStyle.Render("[enter]") + " edit", keyStyle.Render("[/]") + " " + filterLabel, keyStyle.Render("[c]") + " commit", keyStyle.Render("[P]") + " push", keyStyle.Render("[q]") + " quit"}
+			items = []string{keyStyle.Render("[h]") + " all keys", keyStyle.Render("[↑/↓]") + " files", keyStyle.Render("[enter]") + " edit", keyStyle.Render("[F]") + " focus", keyStyle.Render("[/]") + " " + filterLabel, keyStyle.Render("[c]") + " commit", keyStyle.Render("[P]") + " push", keyStyle.Render("[q]") + " quit"}
 		}
 		return []string{strings.Join(items, "  ")}
 	}
@@ -811,6 +890,7 @@ func (m Model) helpView() string {
 		{"v", "list and create GitHub releases"},
 		{": / ctrl+k", "searchable command palette"},
 		{"T", "preview and switch themes"},
+		{"F", "toggle focused file reader while previewing"},
 		{"R", "rebase the current branch onto another"},
 		{"h", "this help"},
 		{"o", "expand or collapse the git output box"},

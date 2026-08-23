@@ -93,6 +93,7 @@ type Model struct {
 	gitOutput            string
 	outputExpanded       bool
 	footerHidden         bool
+	readerFocus          bool
 	splashFrame          int
 	splashMessage        string
 }

@@ -8,13 +8,15 @@ import (
 )
 
 var (
-	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	mutedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	keyStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
-	panelStyle    = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("240")).Padding(0, 1)
-	activeStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("229"))
-	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229")).Background(lipgloss.Color("240"))
+	activeThemeName  = "default"
+	titleStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	errorStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	mutedStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	keyStyle         = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
+	panelStyle       = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("240")).Padding(0, 1)
+	activePanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("86")).Padding(0, 1)
+	activeStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("229"))
+	selectedStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229")).Background(lipgloss.Color("240"))
 
 	syntaxKeywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
 	syntaxStringStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("229"))
@@ -58,15 +60,19 @@ var palettes = map[string]palette{
 
 // applyTheme changes the shared styles to use the requested color theme.
 func applyTheme(name string) {
-	pal, ok := palettes[strings.ToLower(strings.TrimSpace(name))]
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	pal, ok := palettes[normalized]
 	if !ok {
+		normalized = "default"
 		pal = palettes["default"]
 	}
+	activeThemeName = normalized
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(pal.title)
 	errorStyle = lipgloss.NewStyle().Foreground(pal.error)
 	mutedStyle = lipgloss.NewStyle().Foreground(pal.muted)
 	keyStyle = lipgloss.NewStyle().Bold(true).Foreground(pal.key)
-	panelStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(pal.border).Padding(0, 1)
+	panelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.border).Padding(0, 1)
+	activePanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.key).Padding(0, 1)
 	activeStyle = lipgloss.NewStyle().Foreground(pal.active)
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(pal.active).Background(pal.border)
 	syntaxKeywordStyle = lipgloss.NewStyle().Foreground(firstColor(pal.keyword, pal.title))

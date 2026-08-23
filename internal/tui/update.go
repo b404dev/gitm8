@@ -210,6 +210,17 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openCommandPalette()
 	case "T":
 		return m.openThemes()
+	case "F":
+		if m.mode != "preview" {
+			return m.withNotice("Open a file preview before entering focus mode"), nil
+		}
+		m.readerFocus = !m.readerFocus
+		if m.readerFocus {
+			m.toast = "Focus reader on · press F to restore files"
+		} else {
+			m.toast = "File list restored"
+		}
+		return m, nil
 	case "w":
 		return m.openWorkspace()
 	case "v":
