@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
@@ -89,6 +90,23 @@ func TestSplashViewShowsStartupContent(t *testing.T) {
 	got := m.splashView()
 	if !strings.Contains(got, "██████") || !strings.Contains(got, "fetch • branch • commit • push") || !strings.Contains(got, "preparing repository view") || !strings.Contains(got, "thinking about rebase") {
 		t.Fatalf("splashView() = %q, want startup content", got)
+	}
+}
+
+func TestDashboardFooterPointsToFullScreenKeys(t *testing.T) {
+	m := Model{mode: "review"}
+	rows := m.footerRows()
+	if len(rows) != 1 || !strings.Contains(rows[0], "all keys") {
+		t.Fatalf("footerRows() = %#v, want one compact row pointing to help", rows)
+	}
+}
+
+func TestHelpIsFullScreen(t *testing.T) {
+	m := Model{width: 100, height: 30, ready: true, mode: "help", review: viewport.New(80, 20)}
+	m.review.SetContent(m.helpView())
+	got := m.View()
+	if !strings.Contains(got, "KEYBOARD REFERENCE") || strings.Contains(got, "Files") {
+		t.Fatalf("help View() did not render as a dedicated full-screen view: %q", got)
 	}
 }
 

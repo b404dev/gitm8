@@ -76,6 +76,7 @@ type Model struct {
 	searchYOffset        int
 	target               string
 	mode                 string
+	helpReturn           string
 	err                  error
 	notice               string
 	gitOutput            string

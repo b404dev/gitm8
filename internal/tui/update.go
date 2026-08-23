@@ -307,6 +307,7 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.review.GotoTop()
 		return m, nil
 	case "h":
+		m.helpReturn = m.mode
 		m.mode = "help"
 		m.notice = ""
 		m.err = nil
@@ -1397,7 +1398,19 @@ func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "esc", "h":
-		m.mode = "review"
+		returnMode := m.helpReturn
+		if returnMode == "" || returnMode == "help" {
+			returnMode = "review"
+		}
+		m.mode = returnMode
+		if returnMode == "release-detail" {
+			m.review.SetContent(releaseDetailContent(m.releaseDetail))
+			m.review.GotoTop()
+			return m, nil
+		}
+		if returnMode == "releases" {
+			return m, nil
+		}
 		return m, loadReview(m.runner, m.selectedPath())
 	default:
 		return m.updateViewportKey(msg)

@@ -26,6 +26,9 @@ func (m Model) View() string {
 	if m.mode == "releases" || m.mode == "release-create" || m.mode == "release-detail" {
 		return m.releasesScreenView()
 	}
+	if m.mode == "help" {
+		return m.helpScreenView()
+	}
 	if m.splash {
 		return m.splashView()
 	}
@@ -431,45 +434,15 @@ func (m Model) footerRows() []string {
 		if m.mode == "preview" {
 			filterLabel = "find in file"
 		}
-		rows := []string{
-			strings.Join([]string{
-				keyStyle.Render("[↑/↓]") + " files",
-				keyStyle.Render("[enter]") + " edit viewed file",
-				keyStyle.Render("[0]") + " repo",
-				keyStyle.Render("[s]") + " stage",
-				keyStyle.Render("[S]") + " stage all",
-				keyStyle.Render("[u]") + " unstage",
-				keyStyle.Render("[U]") + " unstage all",
-				keyStyle.Render("[n]") + " stash file",
-				keyStyle.Render("[c]") + " commit",
-				keyStyle.Render("[/]") + " " + filterLabel,
-			}, "  "),
-			strings.Join([]string{
-				keyStyle.Render("[d]") + " diff for target",
-				keyStyle.Render("[x]") + " discard file",
-				keyStyle.Render("[f]") + " fetch",
-				keyStyle.Render("[p]") + " pull",
-				keyStyle.Render("[P]") + " push",
-				keyStyle.Render("[z]") + " squash",
-				keyStyle.Render("[C]") + " conflicts",
-				keyStyle.Render("[t]") + " stashes",
-				keyStyle.Render("[b]") + " branches",
-				keyStyle.Render("[l]") + " logs",
-				keyStyle.Render("[i]") + " identity",
-			}, "  "),
-			strings.Join([]string{
-				keyStyle.Render("[y]") + " yazi",
-				keyStyle.Render("[w]") + " projects",
-				keyStyle.Render("[r]") + " PR",
-				keyStyle.Render("[R]") + " rebase",
-				keyStyle.Render("[h]") + " help",
-				keyStyle.Render("[o]") + " output",
-				keyStyle.Render("[tab]") + " hide bar",
-				keyStyle.Render("[j/k]") + " viewer scroll",
-				keyStyle.Render("[q]") + " quit",
-			}, "  "),
-		}
-		return rows
+		return []string{strings.Join([]string{
+			keyStyle.Render("[h]") + " all keys",
+			keyStyle.Render("[↑/↓]") + " files",
+			keyStyle.Render("[enter]") + " edit",
+			keyStyle.Render("[/]") + " " + filterLabel,
+			keyStyle.Render("[c]") + " commit",
+			keyStyle.Render("[P]") + " push",
+			keyStyle.Render("[q]") + " quit",
+		}, "  ")}
 	}
 }
 
@@ -830,9 +803,41 @@ func (m Model) helpView() string {
 	b.WriteString("    Work = Ada Lovelace <ada@work.example>\n")
 	b.WriteString("  Press i to switch; sets git user for this repo only.\n")
 
+	b.WriteString("\n" + titleStyle.Render("RELEASES") + "\n")
+	b.WriteString("  v             open GitHub releases\n")
+	b.WriteString("  ↑/↓ or j/k    choose a release\n")
+	b.WriteString("  enter         inspect notes, metadata, and assets\n")
+	b.WriteString("  n             create a release\n")
+	b.WriteString("  r             refresh releases\n")
+	b.WriteString("  ctrl+d        toggle draft while creating\n")
+	b.WriteString("  ctrl+p        toggle prerelease while creating\n")
+	b.WriteString("  ctrl+g        toggle generated notes while creating\n")
+	b.WriteString("  esc           return\n")
+
 	b.WriteString("\n" + titleStyle.Render("DOCS") + "\n")
 	b.WriteString("  See README.md for full documentation.\n")
 	return b.String()
+}
+
+// helpScreenView gives the complete key reference the full terminal instead of
+// squeezing it beside the changed-files panel.
+func (m Model) helpScreenView() string {
+	contentWidth := max(40, m.width-4)
+	header := panelStyle.Width(contentWidth).Render(strings.Join([]string{
+		titleStyle.Render("gitm8") + "  " + keyStyle.Render("KEYBOARD REFERENCE"),
+		mutedStyle.Render("Every command, in one place"),
+	}, "\n"))
+	footer := mutedStyle.Width(max(20, m.width)).Render(strings.Join([]string{
+		keyStyle.Render("[j/k]") + " scroll",
+		keyStyle.Render("[pgup/pgdn]") + " page",
+		keyStyle.Render("[g/G]") + " top/bottom",
+		keyStyle.Render("[esc/h]") + " close",
+	}, "  "))
+	bodyHeight := max(8, m.height-lipgloss.Height(header)-lipgloss.Height(footer)-1)
+	m.review.Width = max(20, contentWidth-4)
+	m.review.Height = max(1, bodyHeight-4)
+	body := panelStyle.Width(contentWidth).Height(max(1, bodyHeight-2)).Render(m.review.View())
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
 // Splash View

@@ -68,6 +68,12 @@ func (m Model) updateReleases(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		return m, loadReleases(m.runner)
+	case "h":
+		m.helpReturn = "releases"
+		m.mode = "help"
+		m.review.SetContent(m.helpView())
+		m.review.GotoTop()
+		return m, nil
 	case "enter":
 		if len(m.releases) == 0 {
 			return m, nil
@@ -93,6 +99,12 @@ func (m Model) updateReleaseDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "h":
+		m.helpReturn = "release-detail"
+		m.mode = "help"
+		m.review.SetContent(m.helpView())
+		m.review.GotoTop()
+		return m, nil
 	}
 	return m.updateViewportKey(msg)
 }
@@ -334,6 +346,6 @@ func (m Model) releaseCreateCard(width int) string {
 }
 
 func (m Model) releasesFooter() string {
-	items := []string{keyStyle.Render("[↑/↓]") + " choose", keyStyle.Render("[enter]") + " details", keyStyle.Render("[n]") + " create", keyStyle.Render("[r]") + " refresh", keyStyle.Render("[esc]") + " back", keyStyle.Render("[q]") + " quit"}
+	items := []string{keyStyle.Render("[h]") + " all keys", keyStyle.Render("[↑/↓]") + " choose", keyStyle.Render("[enter]") + " details", keyStyle.Render("[n]") + " create", keyStyle.Render("[esc]") + " back", keyStyle.Render("[q]") + " quit"}
 	return mutedStyle.Width(max(20, m.width)).Render(strings.Join(items, "  "))
 }
