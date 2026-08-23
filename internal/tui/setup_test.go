@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -38,5 +40,33 @@ func TestSetupRequiresReviewBeforeSaving(t *testing.T) {
 	}
 	if !strings.Contains(m.setupView(), "Review your configuration before saving") {
 		t.Fatal("review view does not show confirmation summary")
+	}
+}
+
+func TestNewOutsideRepositoryOpensWorkspace(t *testing.T) {
+	workspace := filepath.Join(t.TempDir(), "Github")
+	m := New(git.NewRunner(t.TempDir()), config.Config{
+		WorkspaceDir:      workspace,
+		FirstRunDismissed: true,
+		DefaultBranch:     "main",
+		Editor:            "vi",
+	})
+	if m.mode != "workspace" || m.splash {
+		t.Fatalf("mode = %q splash = %t, want workspace without splash", m.mode, m.splash)
+	}
+	if m.runner.IsRepository(context.Background()) {
+		t.Fatal("test runner unexpectedly points at a repository")
+	}
+	m.ready, m.width, m.height = true, 100, 30
+	if !strings.Contains(m.View(), "Projects") {
+		t.Fatal("outside-repository startup did not render project picker")
+	}
+}
+
+func TestWorkspaceIgnoresStaleRepositoryLoad(t *testing.T) {
+	m := Model{mode: "workspace"}
+	next, _ := m.Update(repoLoadedMsg{mode: "review", target: "repo"})
+	if next.(Model).mode != "workspace" {
+		t.Fatal("stale repository result closed workspace picker")
 	}
 }

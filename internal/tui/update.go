@@ -30,6 +30,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.updateKey(msg)
 	case repoLoadedMsg:
+		// A repository load started before the user opened the project picker
+		// must not pull the UI back into a "no repo" dashboard when it finishes.
+		if m.mode == "workspace" {
+			return m, nil
+		}
 		return m.handleRepoLoaded(msg), nil
 	case branchesLoadedMsg:
 		return m.handleBranchesLoaded(msg), nil
