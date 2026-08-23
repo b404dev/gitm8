@@ -4,6 +4,30 @@ All notable changes to `gitm8` are documented here.
 
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-08-23
+
+A smoother first-run and multi-project workflow for developers who launch
+`gitm8` from their home directory or another location outside a worktree.
+
+### Added
+
+- First-run setup wizard when the configured workspace directory is missing.
+- Reviewed setup for workspace location, global Git name/email, default branch,
+  editor, and optional GitHub CLI authentication.
+- Persistent dismissal of the first-run wizard.
+- Workspace project picker when launching outside a Git repository.
+- In-app switching between repositories with `w`, without restarting gitm8.
+- Repository discovery beneath `GITM8_WORKSPACE_DIR`.
+- GitHub repository cloning and local repository initialization from the picker.
+
+### Changed
+
+- Reworked the project picker to match the themed dashboard, with repository
+  and workspace panels, selected-project details, quick actions, and responsive
+  narrow-terminal rendering.
+- Prevented stale repository loads from replacing the workspace picker with an
+  empty `no repo` dashboard.
+
 ## [2.0.0] - 2026-08-14
 
 A major release focused on rewriting history safely, AI-assisted Git text, and
@@ -54,5 +78,6 @@ Initial public release. Terminal UI for common Git workflows, driving the
 installed `git` binary so existing configuration, SSH keys, credential helpers,
 hooks, aliases, and signing behavior continue to work.
 
+[2.1.0]: https://github.com/b404dev/gitm8/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/b404dev/gitm8/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/b404dev/gitm8/releases/tag/v1.0.0
