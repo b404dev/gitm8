@@ -32,6 +32,15 @@ type Stash struct {
 	Subject string
 }
 
+// Release is one GitHub release row shown by the releases picker.
+type Release struct {
+	Tag        string
+	Name       string
+	Published  string
+	Draft      bool
+	Prerelease bool
+}
+
 // Staged reports whether Git says this file has staged changes.
 func (f FileStatus) Staged() bool {
 	return f.Index != ' ' && f.Index != '?'

@@ -43,7 +43,7 @@ func TestSetupRequiresReviewBeforeSaving(t *testing.T) {
 	}
 }
 
-func TestNewOutsideRepositoryOpensWorkspace(t *testing.T) {
+func TestNewOutsideRepositoryShowsSplashBeforeWorkspace(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "Github")
 	m := New(git.NewRunner(t.TempDir()), config.Config{
 		WorkspaceDir:      workspace,
@@ -51,15 +51,28 @@ func TestNewOutsideRepositoryOpensWorkspace(t *testing.T) {
 		DefaultBranch:     "main",
 		Editor:            "vi",
 	})
-	if m.mode != "workspace" || m.splash {
-		t.Fatalf("mode = %q splash = %t, want workspace without splash", m.mode, m.splash)
+	if m.mode != "workspace" || !m.splash {
+		t.Fatalf("mode = %q splash = %t, want workspace with splash", m.mode, m.splash)
 	}
 	if m.runner.IsRepository(context.Background()) {
 		t.Fatal("test runner unexpectedly points at a repository")
 	}
 	m.ready, m.width, m.height = true, 100, 30
+	if !strings.Contains(m.View(), "preparing repository view") || strings.Contains(m.View(), "WORKSPACE") {
+		t.Fatal("outside-repository startup did not render splash before project picker")
+	}
+
+	m.splashFrame = splashFrameCount - 1
+	next, cmd := m.updateSplash(splashTickMsg{})
+	m = next.(Model)
+	if m.splash || cmd == nil {
+		t.Fatal("finishing splash did not start workspace loading")
+	}
+	if _, ok := cmd().(projectsLoadedMsg); !ok {
+		t.Fatal("finishing splash outside a repository did not load workspace projects")
+	}
 	if !strings.Contains(m.View(), "WORKSPACE") || !strings.Contains(m.View(), "Repositories") {
-		t.Fatal("outside-repository startup did not render project picker")
+		t.Fatal("outside-repository startup did not render project picker after splash")
 	}
 }
 

@@ -65,6 +65,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projects, m.err = msg.projects, msg.err
 		m.projectCursor = clamp(m.projectCursor, 0, max(0, len(m.projects)-1))
 		return m, nil
+	case releasesLoadedMsg:
+		m.releases, m.err = msg.releases, msg.err
+		m.releaseCursor = clamp(m.releaseCursor, 0, max(0, len(m.releases)-1))
+		m.review.SetContent(m.releasesView())
+		m.review.GotoTop()
+		return m, nil
+	case releaseCreatedMsg:
+		m.loading = false
+		m.err = msg.err
+		if msg.err != nil {
+			m.gitOutput = msg.err.Error()
+			m.releaseInputs[m.releaseInput].Focus()
+			return m, nil
+		}
+		m.gitOutput, m.notice = msg.output, msg.output
+		m.mode = "releases"
+		return m, loadReleases(m.runner)
 	case projectOpenedMsg:
 		return m.handleProjectOpened(msg)
 	}
@@ -149,6 +166,12 @@ func (m Model) updateFocusedMode(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "search":
 		next, cmd := m.updateSearch(msg)
 		return next, cmd, true
+	case "releases":
+		next, cmd := m.updateReleases(msg)
+		return next, cmd, true
+	case "release-create":
+		next, cmd := m.updateReleaseCreate(msg)
+		return next, cmd, true
 	}
 
 	return m, nil, false
@@ -160,6 +183,13 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "w":
 		return m.openWorkspace()
+	case "v":
+		m.mode = "releases"
+		m.notice = ""
+		m.err = nil
+		m.review.SetContent("Loading GitHub releases...\n")
+		m.review.GotoTop()
+		return m, loadReleases(m.runner)
 	case "o":
 		m.outputExpanded = !m.outputExpanded
 		logging.Info("tui", "updateDashboardKey", "output_toggle", logging.F("expanded", m.outputExpanded))

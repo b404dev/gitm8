@@ -23,11 +23,14 @@ func (m Model) View() string {
 	if m.mode == "setup" {
 		return m.setupView()
 	}
-	if m.mode == "workspace" {
-		return m.workspaceView()
+	if m.mode == "release-create" {
+		return m.releaseCreateView()
 	}
 	if m.splash {
 		return m.splashView()
+	}
+	if m.mode == "workspace" {
+		return m.workspaceView()
 	}
 
 	header := m.header()
@@ -328,6 +331,15 @@ func (m Model) footerRows() []string {
 				keyStyle.Render("[esc]") + " return",
 			}, "  "),
 		}
+	case "releases":
+		return []string{
+			strings.Join([]string{
+				keyStyle.Render("[↑/↓]") + " choose",
+				keyStyle.Render("[n]") + " new release",
+				keyStyle.Render("[r]") + " refresh",
+				keyStyle.Render("[esc]") + " return",
+			}, "  "),
+		}
 	case "squash":
 		return []string{
 			strings.Join([]string{
@@ -504,6 +516,10 @@ func viewerTitle(mode string) string {
 		return "Conflicts"
 	case "stashes":
 		return "Stashes"
+	case "releases":
+		return "GitHub Releases"
+	case "release-create":
+		return "Create Release"
 	case "new-branch":
 		return "Create Branch"
 	case "delete-branch":
@@ -781,6 +797,7 @@ func (m Model) helpView() string {
 		{"l", "view recent commit logs"},
 		{"i", "identity switcher (git user profiles)"},
 		{"r", "pull request options"},
+		{"v", "list and create GitHub releases"},
 		{"R", "rebase the current branch onto another"},
 		{"h", "this help"},
 		{"o", "expand or collapse the git output box"},
@@ -880,6 +897,9 @@ func (m Model) updateSplash(splashTickMsg) (tea.Model, tea.Cmd) {
 	m.splashFrame++
 	if m.splashFrame >= splashFrameCount {
 		m.splash = false
+		if m.mode == "workspace" {
+			return m, loadProjects(m.config.WorkspaceDir)
+		}
 		return m, loadDefault(m.runner)
 	}
 	return m, tickSplash()

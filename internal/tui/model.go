@@ -25,56 +25,63 @@ type Model struct {
 	ready  bool
 	splash bool
 
-	review           viewport.Model
-	commit           textinput.Model
-	branchInput      textinput.Model
-	fileFilter       textinput.Model
-	searchInput      textinput.Model
-	setupInputs      []textinput.Model
-	setupStep        int
-	setupStage       string
-	projects         []string
-	projectCursor    int
-	projectInput     textinput.Model
-	projectAction    string
-	spinner          spinner.Model
-	loading          bool
-	info             git.RepoInfo
-	files            []git.FileStatus
-	branches         []string
-	fileCursor       int
-	fileOffset       int
-	branchCursor     int
-	branchOffset     int
-	profileCursor    int
-	profileOffset    int
-	conflicts        []string
-	conflictCursor   int
-	conflictOffset   int
-	stashes          []git.Stash
-	stashCursor      int
-	stashOffset      int
-	commits          []git.Commit
-	squashMark       []bool
-	squashBase       int
-	squashCursor     int
-	squashOffset     int
-	viewerContent    string
-	fileFilterActive bool
-	searchMatches    []searchMatch
-	searchCursor     int
-	searchOffset     int
-	searchReturn     string
-	searchYOffset    int
-	target           string
-	mode             string
-	err              error
-	notice           string
-	gitOutput        string
-	outputExpanded   bool
-	footerHidden     bool
-	splashFrame      int
-	splashMessage    string
+	review               viewport.Model
+	commit               textinput.Model
+	branchInput          textinput.Model
+	fileFilter           textinput.Model
+	searchInput          textinput.Model
+	setupInputs          []textinput.Model
+	setupStep            int
+	setupStage           string
+	projects             []string
+	projectCursor        int
+	projectInput         textinput.Model
+	projectAction        string
+	spinner              spinner.Model
+	loading              bool
+	info                 git.RepoInfo
+	files                []git.FileStatus
+	branches             []string
+	fileCursor           int
+	fileOffset           int
+	branchCursor         int
+	branchOffset         int
+	profileCursor        int
+	profileOffset        int
+	conflicts            []string
+	conflictCursor       int
+	conflictOffset       int
+	stashes              []git.Stash
+	releases             []git.Release
+	releaseCursor        int
+	releaseInput         int
+	releaseInputs        []textinput.Model
+	releaseDraft         bool
+	releasePrerelease    bool
+	releaseGenerateNotes bool
+	stashCursor          int
+	stashOffset          int
+	commits              []git.Commit
+	squashMark           []bool
+	squashBase           int
+	squashCursor         int
+	squashOffset         int
+	viewerContent        string
+	fileFilterActive     bool
+	searchMatches        []searchMatch
+	searchCursor         int
+	searchOffset         int
+	searchReturn         string
+	searchYOffset        int
+	target               string
+	mode                 string
+	err                  error
+	notice               string
+	gitOutput            string
+	outputExpanded       bool
+	footerHidden         bool
+	splashFrame          int
+	splashMessage        string
 }
 
 // Messages Sent Back To Update
@@ -165,6 +172,16 @@ type projectOpenedMsg struct {
 	err    error
 }
 
+type releasesLoadedMsg struct {
+	releases []git.Release
+	err      error
+}
+
+type releaseCreatedMsg struct {
+	output string
+	err    error
+}
+
 // Startup
 
 // New builds the first UI state using the Git runner and loaded config.
@@ -213,13 +230,13 @@ func New(runner git.Runner, cfg config.Config) Model {
 	model.projectInput = textinput.New()
 	model.projectInput.Prompt = "> "
 	model.projectInput.CharLimit = 240
+	model.releaseInputs = newReleaseInputs()
 	if config.NeedsFirstRunSetup(cfg) {
 		model.splash = false
 		model.mode = "setup"
 		model.setupStage = "welcome"
 		model.setupInputs = newSetupInputs(runner, cfg)
 	} else if !runner.IsRepository(context.Background()) {
-		model.splash = false
 		model.mode = "workspace"
 	}
 	return model
@@ -229,6 +246,9 @@ func New(runner git.Runner, cfg config.Config) Model {
 func (m Model) Init() tea.Cmd {
 	if m.mode == "setup" {
 		return nil
+	}
+	if m.splash {
+		return tickSplash()
 	}
 	if m.mode == "workspace" {
 		return loadProjects(m.config.WorkspaceDir)
