@@ -122,21 +122,55 @@ func (m Model) handleProjectOpened(msg projectOpenedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) workspaceView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("Projects") + "\n")
-	b.WriteString(mutedStyle.Render(m.config.WorkspaceDir) + "\n\n")
+	contentWidth := max(40, m.width-4)
+	header := panelStyle.Width(contentWidth).Render(strings.Join([]string{
+		titleStyle.Render("gitm8") + "  " + keyStyle.Render("WORKSPACE"),
+		mutedStyle.Render("Choose where you want to work"),
+	}, "\n"))
+
 	if m.projectAction != "" {
+		var b strings.Builder
 		label := "Clone GitHub repository"
+		description := "Enter owner/repository and gitm8 will clone it into your workspace."
 		if m.projectAction == "init" {
 			label = "Create local repository"
+			description = "Enter a folder name and gitm8 will initialize it with branch " + m.config.DefaultBranch + "."
 		}
-		b.WriteString(titleStyle.Render(label) + "\n" + m.projectInput.View() + "\n\n")
-		b.WriteString(mutedStyle.Render("enter: continue  esc: cancel"))
-	} else if len(m.projects) == 0 {
-		b.WriteString("No Git repositories found in this workspace.\n\n")
-		b.WriteString(mutedStyle.Render("c: clone from GitHub  n: create local  r: refresh  q: quit"))
+		b.WriteString(titleStyle.Render(label) + "\n")
+		b.WriteString(mutedStyle.Render(description) + "\n\n")
+		b.WriteString(m.projectInput.View() + "\n\n")
+		b.WriteString(keyStyle.Render("enter") + mutedStyle.Render(" continue") + "    " + keyStyle.Render("esc") + mutedStyle.Render(" cancel"))
+		if m.err != nil {
+			b.WriteString("\n\n" + errorStyle.Render("! "+m.err.Error()))
+		}
+		dialog := panelStyle.Width(clamp(contentWidth-12, 44, 72)).Padding(1, 2).Render(b.String())
+		bodyHeight := max(8, m.height-lipgloss.Height(header)-2)
+		body := lipgloss.Place(contentWidth+2, bodyHeight, lipgloss.Center, lipgloss.Center, dialog)
+		return lipgloss.JoinVertical(lipgloss.Left, header, body)
+	}
+
+	bodyHeight := max(8, m.height-lipgloss.Height(header)-lipgloss.Height(m.workspaceFooter())-1)
+	listWidth := clamp(contentWidth*2/3, 34, 72)
+	detailWidth := max(24, contentWidth-listWidth-3)
+	if contentWidth < 76 {
+		listWidth = contentWidth
+		detailWidth = contentWidth
+	}
+	list := m.workspaceListPanel(listWidth, bodyHeight)
+	detail := m.workspaceDetailPanel(detailWidth, bodyHeight)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, list, detail)
+	if contentWidth < 76 {
+		body = list
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, m.workspaceFooter())
+}
+
+func (m Model) workspaceListPanel(width, height int) string {
+	lines := []string{titleStyle.Render("Repositories") + "  " + keyStyle.Render(fmt.Sprintf("%d", len(m.projects))), mutedStyle.Render("↑/↓ navigate  enter open"), ""}
+	if len(m.projects) == 0 {
+		lines = append(lines, mutedStyle.Render("No repositories found."), "", "Clone a GitHub repository or create", "a fresh local project to get started.")
 	} else {
-		maxRows := max(1, m.height-12)
+		maxRows := max(1, height-6)
 		start := clamp(m.projectCursor-maxRows+1, 0, max(0, len(m.projects)-maxRows))
 		end := min(len(m.projects), start+maxRows)
 		for i := start; i < end; i++ {
@@ -144,19 +178,41 @@ func (m Model) workspaceView() string {
 			if err != nil {
 				rel = m.projects[i]
 			}
-			prefix := "  "
-			style := mutedStyle
+			marker, badge, style := "  ", mutedStyle.Render("git"), mutedStyle
 			if i == m.projectCursor {
-				prefix = "> "
-				style = activeStyle
+				marker, badge, style = keyStyle.Render("▸ "), keyStyle.Render("git"), activeStyle.Copy().Bold(true)
 			}
-			b.WriteString(style.Render(prefix+rel) + "\n")
+			nameWidth := max(8, width-13)
+			lines = append(lines, marker+style.Render(trimMiddle(rel, nameWidth))+"  "+badge)
 		}
-		b.WriteString("\n" + mutedStyle.Render("↑/↓: choose  enter: open  c: clone  n: create  r: refresh  esc: return  q: quit"))
+		if len(m.projects) > maxRows {
+			lines = append(lines, "", mutedStyle.Render(fmt.Sprintf("showing %d-%d of %d", start+1, end, len(m.projects))))
+		}
 	}
 	if m.err != nil {
-		b.WriteString("\n\n" + errorStyle.Render(m.err.Error()))
+		lines = append(lines, "", errorStyle.Render("! "+m.err.Error()))
 	}
-	cardWidth := clamp(m.width-8, 48, 84)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panelStyle.Width(cardWidth).Render(b.String()))
+	return panelStyle.Width(width).Height(max(1, height-2)).Render(strings.Join(lines, "\n"))
+}
+
+func (m Model) workspaceDetailPanel(width, height int) string {
+	var lines []string
+	lines = append(lines, titleStyle.Render("Workspace"), "", keyStyle.Render("ROOT"), mutedStyle.Render(trimMiddle(m.config.WorkspaceDir, max(12, width-4))), "")
+	if len(m.projects) > 0 {
+		path := m.projects[clamp(m.projectCursor, 0, len(m.projects)-1)]
+		rel, err := filepath.Rel(m.config.WorkspaceDir, path)
+		if err != nil {
+			rel = filepath.Base(path)
+		}
+		lines = append(lines, keyStyle.Render("SELECTED"), activeStyle.Copy().Bold(true).Render(trimMiddle(rel, max(12, width-4))), "", mutedStyle.Render("Ready to open"))
+	} else {
+		lines = append(lines, keyStyle.Render("STATUS"), mutedStyle.Render("Workspace is empty"))
+	}
+	lines = append(lines, "", titleStyle.Render("Quick actions"), keyStyle.Render("c")+"  Clone from GitHub", keyStyle.Render("n")+"  New local repository", keyStyle.Render("r")+"  Rescan workspace")
+	return panelStyle.Width(width).Height(max(1, height-2)).Render(strings.Join(lines, "\n"))
+}
+
+func (m Model) workspaceFooter() string {
+	items := []string{keyStyle.Render("[↑/↓]") + " choose", keyStyle.Render("[enter]") + " open", keyStyle.Render("[c]") + " clone", keyStyle.Render("[n]") + " create", keyStyle.Render("[r]") + " refresh", keyStyle.Render("[esc]") + " back", keyStyle.Render("[q]") + " quit"}
+	return mutedStyle.Width(max(20, m.width)).Render(strings.Join(items, "  "))
 }

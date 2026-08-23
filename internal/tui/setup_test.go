@@ -58,7 +58,7 @@ func TestNewOutsideRepositoryOpensWorkspace(t *testing.T) {
 		t.Fatal("test runner unexpectedly points at a repository")
 	}
 	m.ready, m.width, m.height = true, 100, 30
-	if !strings.Contains(m.View(), "Projects") {
+	if !strings.Contains(m.View(), "WORKSPACE") || !strings.Contains(m.View(), "Repositories") {
 		t.Fatal("outside-repository startup did not render project picker")
 	}
 }
