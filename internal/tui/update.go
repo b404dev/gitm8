@@ -56,6 +56,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSetupFinished(msg)
 	case setupAuthFinishedMsg:
 		return m.handleSetupAuthFinished(msg)
+	case projectsLoadedMsg:
+		m.projects, m.err = msg.projects, msg.err
+		m.projectCursor = clamp(m.projectCursor, 0, max(0, len(m.projects)-1))
+		return m, nil
+	case projectOpenedMsg:
+		return m.handleProjectOpened(msg)
 	}
 
 	var cmd tea.Cmd
@@ -77,6 +83,9 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.mode == "setup" {
 		return m.updateSetup(msg)
+	}
+	if m.mode == "workspace" {
+		return m.updateWorkspace(msg)
 	}
 
 	if m.fileFilterActive {
@@ -144,6 +153,8 @@ func (m Model) updateFocusedMode(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	logging.Info("tui", "updateDashboardKey", "key_pressed", logging.F("key", msg.String()), logging.F("mode", m.mode), logging.F("target", m.target))
 	switch msg.String() {
+	case "w":
+		return m.openWorkspace()
 	case "o":
 		m.outputExpanded = !m.outputExpanded
 		logging.Info("tui", "updateDashboardKey", "output_toggle", logging.F("expanded", m.outputExpanded))

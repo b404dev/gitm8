@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -31,6 +33,10 @@ type Model struct {
 	setupInputs      []textinput.Model
 	setupStep        int
 	setupStage       string
+	projects         []string
+	projectCursor    int
+	projectInput     textinput.Model
+	projectAction    string
 	spinner          spinner.Model
 	loading          bool
 	info             git.RepoInfo
@@ -148,6 +154,17 @@ type setupFinishedMsg struct {
 	err    error
 }
 
+type projectsLoadedMsg struct {
+	projects []string
+	err      error
+}
+
+type projectOpenedMsg struct {
+	path   string
+	output string
+	err    error
+}
+
 // Startup
 
 // New builds the first UI state using the Git runner and loaded config.
@@ -193,11 +210,17 @@ func New(runner git.Runner, cfg config.Config) Model {
 		splash:        true,
 		splashMessage: randomSplashMessage(),
 	}
+	model.projectInput = textinput.New()
+	model.projectInput.Prompt = "> "
+	model.projectInput.CharLimit = 240
 	if config.NeedsFirstRunSetup(cfg) {
 		model.splash = false
 		model.mode = "setup"
 		model.setupStage = "welcome"
 		model.setupInputs = newSetupInputs(runner, cfg)
+	} else if !runner.IsRepository(context.Background()) {
+		model.splash = false
+		model.mode = "workspace"
 	}
 	return model
 }
@@ -206,6 +229,9 @@ func New(runner git.Runner, cfg config.Config) Model {
 func (m Model) Init() tea.Cmd {
 	if m.mode == "setup" {
 		return nil
+	}
+	if m.mode == "workspace" {
+		return loadProjects(m.config.WorkspaceDir)
 	}
 	return tickSplash()
 }

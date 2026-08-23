@@ -149,6 +149,9 @@ func (m Model) handleSetupFinished(msg setupFinishedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.gitOutput = msg.output
+	m.config.WorkspaceDir = m.setupValues().WorkspaceDir
+	m.config.DefaultBranch = m.setupValues().DefaultBranch
+	m.config.Editor = m.setupValues().Editor
 	m.setupStage = "auth"
 	return m, nil
 }
@@ -173,6 +176,10 @@ func (m Model) handleSetupAuthFinished(msg setupAuthFinishedMsg) (tea.Model, tea
 }
 
 func (m Model) finishSetup(notice string) (tea.Model, tea.Cmd) {
+	if !m.runner.IsRepository(context.Background()) {
+		m.notice = notice
+		return m.openWorkspace()
+	}
 	m.mode = "review"
 	m.notice = notice
 	m.splash = true

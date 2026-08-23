@@ -100,8 +100,9 @@ gitm8
 ```
 
 Most dashboard features expect the current directory to be part of a Git
-worktree. If you open `gitm8` outside a repository, Git commands will fail until
-you `cd` into a project.
+worktree. If you open `gitm8` outside a repository, it opens the project picker
+and lists repositories beneath `GITM8_WORKSPACE_DIR`. You can open an existing
+repository, clone one from GitHub with `c`, or initialize one with `n`.
 
 The layout is:
 
@@ -157,6 +158,7 @@ mode.
 | `o` | Expand/collapse the git output box |
 | `tab` | Hide/show the footer key bar |
 | `y` | Open `yazi` file manager, if installed |
+| `w` | Open the workspace project picker |
 | `j` / `k` | Scroll viewer line by line |
 | `pgdn` / `pgup` (`ctrl+f` / `ctrl+b`) | Scroll viewer by a page |
 | `g` / `G` | Jump viewer to top / bottom |
