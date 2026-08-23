@@ -23,8 +23,8 @@ func (m Model) View() string {
 	if m.mode == "setup" {
 		return m.setupView()
 	}
-	if m.mode == "release-create" {
-		return m.releaseCreateView()
+	if m.mode == "releases" || m.mode == "release-create" || m.mode == "release-detail" {
+		return m.releasesScreenView()
 	}
 	if m.splash {
 		return m.splashView()

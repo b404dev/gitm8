@@ -68,8 +68,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case releasesLoadedMsg:
 		m.releases, m.err = msg.releases, msg.err
 		m.releaseCursor = clamp(m.releaseCursor, 0, max(0, len(m.releases)-1))
-		m.review.SetContent(m.releasesView())
-		m.review.GotoTop()
 		return m, nil
 	case releaseCreatedMsg:
 		m.loading = false
@@ -82,6 +80,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gitOutput, m.notice = msg.output, msg.output
 		m.mode = "releases"
 		return m, loadReleases(m.runner)
+	case releaseDetailLoadedMsg:
+		m.releaseDetail, m.err = msg.detail, msg.err
+		if msg.err != nil {
+			m.review.SetContent(errorStyle.Render("! " + msg.err.Error()))
+		} else {
+			m.review.SetContent(releaseDetailContent(msg.detail))
+		}
+		m.review.GotoTop()
+		return m, nil
 	case projectOpenedMsg:
 		return m.handleProjectOpened(msg)
 	}
@@ -171,6 +178,9 @@ func (m Model) updateFocusedMode(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return next, cmd, true
 	case "release-create":
 		next, cmd := m.updateReleaseCreate(msg)
+		return next, cmd, true
+	case "release-detail":
+		next, cmd := m.updateReleaseDetail(msg)
 		return next, cmd, true
 	}
 

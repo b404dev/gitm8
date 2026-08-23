@@ -53,6 +53,7 @@ type Model struct {
 	conflictOffset       int
 	stashes              []git.Stash
 	releases             []git.Release
+	releaseDetail        git.ReleaseDetail
 	releaseCursor        int
 	releaseInput         int
 	releaseInputs        []textinput.Model
@@ -179,6 +180,11 @@ type releasesLoadedMsg struct {
 
 type releaseCreatedMsg struct {
 	output string
+	err    error
+}
+
+type releaseDetailLoadedMsg struct {
+	detail git.ReleaseDetail
 	err    error
 }
 

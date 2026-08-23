@@ -24,6 +24,49 @@ func (r Runner) Releases(ctx context.Context) ([]Release, error) {
 	return releases, nil
 }
 
+// ReleaseDetails loads the full notes, metadata, and assets for one release.
+func (r Runner) ReleaseDetails(ctx context.Context, tag string) (ReleaseDetail, error) {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return ReleaseDetail{}, fmt.Errorf("gh CLI is required for releases: install gh and run gh auth login")
+	}
+	out, err := r.commandOutput(ctx, "gh", "release", "view", strings.TrimSpace(tag), "--json", "tagName,name,publishedAt,isDraft,isPrerelease,author,body,url,targetCommitish,createdAt,assets")
+	if err != nil {
+		return ReleaseDetail{}, err
+	}
+	return parseReleaseDetail(out)
+}
+
+func parseReleaseDetail(out string) (ReleaseDetail, error) {
+	var row struct {
+		Tag        string `json:"tagName"`
+		Name       string `json:"name"`
+		Published  string `json:"publishedAt"`
+		Draft      bool   `json:"isDraft"`
+		Prerelease bool   `json:"isPrerelease"`
+		Author     struct {
+			Login string `json:"login"`
+		} `json:"author"`
+		Body            string `json:"body"`
+		URL             string `json:"url"`
+		TargetCommitish string `json:"targetCommitish"`
+		Created         string `json:"createdAt"`
+		Assets          []struct {
+			Name        string `json:"name"`
+			Size        int64  `json:"size"`
+			ContentType string `json:"contentType"`
+			URL         string `json:"url"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal([]byte(out), &row); err != nil {
+		return ReleaseDetail{}, fmt.Errorf("parse GitHub release details: %w", err)
+	}
+	detail := ReleaseDetail{Release: Release{Tag: row.Tag, Name: row.Name, Published: row.Published, Draft: row.Draft, Prerelease: row.Prerelease}, Author: row.Author.Login, Body: row.Body, URL: row.URL, TargetCommitish: row.TargetCommitish, Created: row.Created}
+	for _, asset := range row.Assets {
+		detail.Assets = append(detail.Assets, ReleaseAsset{Name: asset.Name, Size: asset.Size, ContentType: asset.ContentType, URL: asset.URL})
+	}
+	return detail, nil
+}
+
 func parseReleases(out string) ([]Release, error) {
 	var rows []struct {
 		Tag        string `json:"tagName"`

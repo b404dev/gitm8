@@ -10,13 +10,33 @@ import (
 )
 
 func TestReleasesViewShowsStates(t *testing.T) {
-	m := Model{releases: []git.Release{
+	m := Model{width: 100, height: 30, ready: true, mode: "releases", releases: []git.Release{
 		{Tag: "v1.0.0", Name: "First", Published: "2026-08-23T10:00:00Z"},
 		{Tag: "v2.0.0-rc1", Prerelease: true},
 	}}
-	got := m.releasesView()
+	got := m.releasesScreenView()
 	if !strings.Contains(got, "v1.0.0") || !strings.Contains(got, "published") || !strings.Contains(got, "prerelease") {
 		t.Fatalf("releasesView() = %q", got)
+	}
+}
+
+func TestReleaseArrowKeysMoveVisibleSelection(t *testing.T) {
+	m := Model{width: 100, height: 30, ready: true, mode: "releases", releases: []git.Release{{Tag: "v1"}, {Tag: "v2"}}}
+	before := m.releasesScreenView()
+	next, _ := m.updateReleases(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(Model)
+	after := m.releasesScreenView()
+	if m.releaseCursor != 1 || before == after {
+		t.Fatalf("down key left cursor=%d or did not redraw selection", m.releaseCursor)
+	}
+}
+
+func TestEnterLoadsSelectedReleaseDetails(t *testing.T) {
+	m := Model{mode: "releases", releases: []git.Release{{Tag: "v1"}, {Tag: "v2"}}, releaseCursor: 1}
+	next, cmd := m.updateReleases(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if m.mode != "release-detail" || cmd == nil {
+		t.Fatalf("enter produced mode=%q cmd=%v", m.mode, cmd)
 	}
 }
 

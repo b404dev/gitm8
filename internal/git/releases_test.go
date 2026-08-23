@@ -23,3 +23,13 @@ func TestReleaseCreateArgs(t *testing.T) {
 		t.Fatalf("releaseCreateArgs() = %#v, want %#v", got, want)
 	}
 }
+
+func TestParseReleaseDetail(t *testing.T) {
+	got, err := parseReleaseDetail(`{"tagName":"v2.0.0","name":"Two","publishedAt":"2026-08-23T10:00:00Z","author":{"login":"bill"},"body":"Changes","url":"https://example.test/release","targetCommitish":"main","assets":[{"name":"gitm8","size":2048,"contentType":"application/octet-stream","url":"https://example.test/asset"}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Tag != "v2.0.0" || got.Author != "bill" || got.Body != "Changes" || len(got.Assets) != 1 || got.Assets[0].Size != 2048 {
+		t.Fatalf("parseReleaseDetail() = %#v", got)
+	}
+}

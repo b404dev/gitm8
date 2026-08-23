@@ -171,7 +171,8 @@ Press `v` to list GitHub releases for the current repository. Press `n` to
 create one, enter its tag, title, and optional notes, and use `ctrl+d`, `ctrl+p`,
 or `ctrl+g` to toggle draft, prerelease, or GitHub-generated notes. GitHub
 creates the tag when it does not already exist. Release operations require an
-authenticated GitHub CLI (`gh`).
+authenticated GitHub CLI (`gh`). Select a release and press `enter` to inspect
+its complete notes, author, target, URL, and downloadable assets.
 
 ### Branches
 
