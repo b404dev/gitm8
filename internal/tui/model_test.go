@@ -183,13 +183,19 @@ func TestFileListNameShowsBasenameOnly(t *testing.T) {
 	}
 }
 
-func TestOutputBarShowsSelectedFullPath(t *testing.T) {
+func TestPreviewOutputBarDoesNotRepeatSelectedPath(t *testing.T) {
 	m := Model{width: 120, mode: "preview", target: "src/deep/main.go"}
-	if got := m.outputBar(); !strings.Contains(got, "path src/deep/main.go") {
-		t.Fatalf("outputBar() = %q, want selected full path", got)
+	if got := m.outputBar(); strings.Contains(got, "path src/deep/main.go") {
+		t.Fatalf("outputBar() = %q, repeated path already shown by reader header", got)
 	}
-	if got := m.topBar(); strings.Contains(got, "path src/deep/main.go") {
-		t.Fatalf("topBar() = %q, want path only in output bar", got)
+}
+
+func TestSelectedFileRowFitsSidebarAsOneHighlight(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	m := Model{width: 100, height: 24, fileCursor: 0, files: []git.FileStatus{{Path: "deeply/nested/very-long-component-name.go", Worktree: 'M'}}}
+	got := m.filesPanel(15)
+	if lipgloss.Width(got) > m.filesWidth()+2 || !strings.Contains(got, "▸") || !strings.Contains(got, "name.go") {
+		t.Fatalf("filesPanel() width=%d content=%q", lipgloss.Width(got), got)
 	}
 }
 

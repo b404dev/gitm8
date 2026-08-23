@@ -157,7 +157,7 @@ func (m Model) outputBar() string {
 
 func (m Model) outputBarPrefix() string {
 	path := m.selectedPath()
-	if path == "" || (m.mode != "preview" && m.mode != "review") {
+	if path == "" || m.mode != "review" {
 		return ""
 	}
 	return keyStyle.Render("path ") + mutedStyle.Render(path) + "  "
@@ -265,18 +265,12 @@ func (m Model) filesPanelWithRows(height int, files []git.FileStatus) string {
 	end := min(len(files), m.fileOffset+visibleRows)
 	for i := m.fileOffset; i < end; i++ {
 		file := files[i]
-		pointer := "  "
-		style := lipgloss.NewStyle()
+		rowWidth := max(8, width-2)
+		name := trimMiddle(fileListName(file), max(4, rowWidth-6))
 		if i == m.fileCursor {
-			style = selectedStyle.Width(max(8, width-5))
-			pointer = "▸ "
-		}
-		badge := statusBadge(file)
-		row := pointer + badge + " " + trimMiddle(fileListName(file), width-9)
-		if i == m.fileCursor {
-			lines = append(lines, style.Render(row))
+			lines = append(lines, selectedStyle.Width(rowWidth).Render("▸ "+statusBadgeLabel(file)+" "+name))
 		} else {
-			lines = append(lines, row)
+			lines = append(lines, "  "+statusBadge(file)+" "+name)
 		}
 	}
 	if len(m.files) == 0 {
@@ -567,19 +561,41 @@ func (m Model) footerRows() []string {
 
 // statusBadge turns Git status values into short staged/unstaged labels.
 func statusBadge(file git.FileStatus) string {
+	label := statusBadgeLabel(file)
 	switch {
 	case file.Renamed():
-		return keyStyle.Render("REN")
+		return keyStyle.Render(label)
 	case file.Deleted():
-		return errorStyle.Render("DEL")
+		return errorStyle.Render(label)
 	case file.Staged() && file.Unstaged():
-		return activeStyle.Render("S/U")
+		return activeStyle.Render(label)
 	case file.Staged():
-		return keyStyle.Render("S  ")
+		return keyStyle.Render(label)
 	case file.Unstaged():
-		return mutedStyle.Render(" U ")
+		return mutedStyle.Render(label)
 	default:
-		return mutedStyle.Render(file.Label())
+		return mutedStyle.Render(label)
+	}
+}
+
+func statusBadgeLabel(file git.FileStatus) string {
+	switch {
+	case file.Renamed():
+		return "REN"
+	case file.Deleted():
+		return "DEL"
+	case file.Staged() && file.Unstaged():
+		return "S/U"
+	case file.Staged():
+		return "S  "
+	case file.Unstaged():
+		return " U "
+	default:
+		label := file.Label()
+		if len(label) < 3 {
+			label += strings.Repeat(" ", 3-len(label))
+		}
+		return label
 	}
 }
 
