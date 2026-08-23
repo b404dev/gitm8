@@ -14,6 +14,8 @@ import (
 // Config is the final set of settings used by the app after defaults, files,
 // and environment variables are applied.
 type Config struct {
+	WorkspaceDir              string
+	FirstRunDismissed         bool
 	DefaultBranch             string
 	Editor                    string
 	Theme                     string
@@ -158,6 +160,8 @@ func defaultConfigContent(cfg Config) string {
 	var b strings.Builder
 	b.WriteString("# gitm8 config\n")
 	b.WriteString("# Generated automatically. Edit these values to change gitm8 defaults.\n\n")
+	b.WriteString("export GITM8_WORKSPACE_DIR=\"" + configValue(cfg.WorkspaceDir) + "\"\n")
+	b.WriteString("export GITM8_FIRST_RUN_DISMISSED=\"" + strconv.FormatBool(cfg.FirstRunDismissed) + "\"\n")
 	b.WriteString("export GITM8_DEFAULT_BRANCH=\"" + configValue(cfg.DefaultBranch) + "\"\n")
 	b.WriteString("export GITM8_EDITOR=\"" + configValue(cfg.Editor) + "\"\n")
 	b.WriteString("export GITM8_THEME=\"" + configValue(cfg.Theme) + "\"\n")
@@ -243,6 +247,8 @@ func defaults() Config {
 	home := homeDir()
 	provider, available, reason := defaultAIProvider()
 	return Config{
+		WorkspaceDir:              filepath.Join(home, "Github"),
+		FirstRunDismissed:         false,
 		DefaultBranch:             "main",
 		Editor:                    firstNonEmpty(os.Getenv("EDITOR"), "vi"),
 		Theme:                     "default",
@@ -325,6 +331,8 @@ func parseValue(raw string) string {
 
 // applyEnv applies supported GITM8_* environment variables to cfg.
 func applyEnv(cfg *Config) {
+	cfg.WorkspaceDir = expandHomePath(envString("GITM8_WORKSPACE_DIR", cfg.WorkspaceDir))
+	cfg.FirstRunDismissed = envBool("GITM8_FIRST_RUN_DISMISSED", cfg.FirstRunDismissed)
 	cfg.DefaultBranch = envString("GITM8_DEFAULT_BRANCH", cfg.DefaultBranch)
 	cfg.Editor = envString("GITM8_EDITOR", cfg.Editor)
 	cfg.Theme = envString("GITM8_THEME", cfg.Theme)
@@ -340,6 +348,66 @@ func applyEnv(cfg *Config) {
 	cfg.LogFile = expandHomePath(envString("GITM8_LOG_FILE", cfg.LogFile))
 	cfg.GithubToken = os.Getenv("GITM8_GITHUB_TOKEN")
 	cfg.GitlabToken = os.Getenv("GITM8_GITLAB_TOKEN")
+}
+
+// NeedsFirstRunSetup reports whether the onboarding wizard should be shown.
+func NeedsFirstRunSetup(cfg Config) bool {
+	if cfg.FirstRunDismissed {
+		return false
+	}
+	info, err := os.Stat(cfg.WorkspaceDir)
+	return err != nil || !info.IsDir()
+}
+
+// SetupValues is the configuration confirmed on the onboarding review screen.
+type SetupValues struct {
+	WorkspaceDir  string
+	Name          string
+	Email         string
+	DefaultBranch string
+	Editor        string
+}
+
+// SaveFirstRunSetup writes confirmed onboarding values to gitm8's dotfile.
+func SaveFirstRunSetup(values SetupValues) error {
+	return writeSetupValues(map[string]string{
+		"GITM8_WORKSPACE_DIR":       values.WorkspaceDir,
+		"GITM8_DEFAULT_BRANCH":      values.DefaultBranch,
+		"GITM8_EDITOR":              values.Editor,
+		"GITM8_FIRST_RUN_DISMISSED": "false",
+	})
+}
+
+// DismissFirstRunSetup remembers that the user declined onboarding.
+func DismissFirstRunSetup() error {
+	return writeSetupValues(map[string]string{"GITM8_FIRST_RUN_DISMISSED": "true"})
+}
+
+func writeSetupValues(values map[string]string) error {
+	dir := filepath.Join(homeDir(), ".gitm8")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, ".gitm8rc")
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	var kept []string
+	for _, line := range strings.Split(string(data), "\n") {
+		key, _, ok := parseExport(line)
+		if _, replace := values[key]; ok && replace {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	kept = append(kept, "", "# Managed by the gitm8 first-run setup wizard.")
+	for _, key := range []string{"GITM8_WORKSPACE_DIR", "GITM8_DEFAULT_BRANCH", "GITM8_EDITOR", "GITM8_FIRST_RUN_DISMISSED"} {
+		if value, ok := values[key]; ok {
+			kept = append(kept, "export "+key+"=\""+configValue(value)+"\"")
+		}
+	}
+	return os.WriteFile(path, []byte(strings.TrimSpace(strings.Join(kept, "\n"))+"\n"), 0o644)
 }
 
 func normalizeAIProvider(provider string) string {
@@ -456,7 +524,9 @@ func expandHomePath(path string) string {
 }
 
 // homeDir returns the user's home directory, or "." if the OS cannot provide it.
-func homeDir() string {
+var homeDir = systemHomeDir
+
+func systemHomeDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "."

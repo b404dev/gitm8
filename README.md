@@ -100,8 +100,9 @@ gitm8
 ```
 
 Most dashboard features expect the current directory to be part of a Git
-worktree. If you open `gitm8` outside a repository, Git commands will fail until
-you `cd` into a project.
+worktree. If you open `gitm8` outside a repository, it opens the project picker
+and lists repositories beneath `GITM8_WORKSPACE_DIR`. You can open an existing
+repository, clone one from GitHub with `c`, or initialize one with `n`.
 
 The layout is:
 
@@ -157,6 +158,7 @@ mode.
 | `o` | Expand/collapse the git output box |
 | `tab` | Hide/show the footer key bar |
 | `y` | Open `yazi` file manager, if installed |
+| `w` | Open the workspace project picker |
 | `j` / `k` | Scroll viewer line by line |
 | `pgdn` / `pgup` (`ctrl+f` / `ctrl+b`) | Scroll viewer by a page |
 | `g` / `G` | Jump viewer to top / bottom |
@@ -260,6 +262,13 @@ That shortcut is hidden when the configured provider is not installed.
 
 ## Configuration
 
+On first launch, if the configured workspace directory (initially `~/Github`)
+does not exist, gitm8 opens a setup wizard. It collects the workspace path,
+global Git name and email, initial branch name, and editor. Nothing is written
+until the review screen is confirmed. After saving, the wizard can launch
+`gh auth login` interactively. Declining is recorded in the gitm8 dotfile so
+the wizard does not reappear.
+
 Configuration is loaded from `~/.gitm8/.gitm8rc`, then `~/.gitm8/gitm8rc`,
 then the legacy `~/.gitm8rc`, then `~/.gitm8/credentials`. Environment
 variables override defaults.
@@ -272,6 +281,8 @@ clear AI unavailable comment. If an existing config selects a missing provider,
 is installed.
 
 ```sh
+export GITM8_WORKSPACE_DIR="$HOME/Github"
+export GITM8_FIRST_RUN_DISMISSED="false"
 export GITM8_DEFAULT_BRANCH="main"
 export GITM8_EDITOR="vim"
 export GITM8_THEME="catppuccin"

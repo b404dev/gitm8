@@ -20,6 +20,12 @@ func (m Model) View() string {
 	if !m.ready {
 		return "Loading gitm8..."
 	}
+	if m.mode == "setup" {
+		return m.setupView()
+	}
+	if m.mode == "workspace" {
+		return m.workspaceView()
+	}
 	if m.splash {
 		return m.splashView()
 	}
@@ -441,6 +447,7 @@ func (m Model) footerRows() []string {
 			}, "  "),
 			strings.Join([]string{
 				keyStyle.Render("[y]") + " yazi",
+				keyStyle.Render("[w]") + " projects",
 				keyStyle.Render("[r]") + " PR",
 				keyStyle.Render("[R]") + " rebase",
 				keyStyle.Render("[h]") + " help",

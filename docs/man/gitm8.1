@@ -182,6 +182,14 @@ Open
 .BR yazi (1),
 if installed.
 .TP
+.B w
+Open the workspace project picker. Existing repositories can be opened without
+restarting gitm8; use
+.B c
+to clone through GitHub CLI or
+.B n
+to initialize a local repository.
+.TP
 .B j, k
 Scroll the viewer line by line.
 .TP
@@ -273,6 +281,12 @@ to pop, and
 .B D
 to drop the selected stash.
 .SH CONFIGURATION
+On first launch, when the configured workspace directory (initially
+.IR ~/Github )
+does not exist, gitm8 shows a setup wizard for the workspace path, global Git
+identity, initial branch, editor, and optional GitHub CLI authentication.
+The wizard shows a review before writing changes. Declining is remembered.
+.PP
 Configuration is loaded from
 .IR ~/.gitm8/.gitm8rc ,
 then
@@ -298,6 +312,14 @@ when installed, falls back to
 when only Claude is installed, and otherwise writes an AI unavailable comment.
 Existing configs keep their selected provider; generated AI actions are disabled
 when that provider is not installed.
+.TP
+.B GITM8_WORKSPACE_DIR
+Directory checked by the first-run setup wizard.
+Default:
+.IR ~/Github .
+.TP
+.B GITM8_FIRST_RUN_DISMISSED
+Whether the first-run setup prompt has been declined.
 .TP
 .B GITM8_DEFAULT_BRANCH
 Default branch name.
