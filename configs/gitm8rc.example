@@ -2,6 +2,8 @@
 # Copy the settings you want into ~/.gitm8/.gitm8rc.
 # gitm8 also creates that file automatically on first run when no config exists.
 
+export GITM8_WORKSPACE_DIR="$HOME/Github"
+export GITM8_FIRST_RUN_DISMISSED="false"
 export GITM8_DEFAULT_BRANCH="main"
 export GITM8_EDITOR="vim"
 export GITM8_THEME="catppuccin"

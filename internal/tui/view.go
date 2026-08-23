@@ -20,6 +20,9 @@ func (m Model) View() string {
 	if !m.ready {
 		return "Loading gitm8..."
 	}
+	if m.mode == "setup" {
+		return m.setupView()
+	}
 	if m.splash {
 		return m.splashView()
 	}

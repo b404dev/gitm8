@@ -87,6 +87,51 @@ func TestDefaultConfigContentIncludesMattMode(t *testing.T) {
 	}
 }
 
+func TestNeedsFirstRunSetup(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "Github")
+	if !NeedsFirstRunSetup(Config{WorkspaceDir: missing}) {
+		t.Fatal("missing workspace should require setup")
+	}
+	if NeedsFirstRunSetup(Config{WorkspaceDir: missing, FirstRunDismissed: true}) {
+		t.Fatal("dismissed setup should remain dismissed")
+	}
+	if err := os.Mkdir(missing, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if NeedsFirstRunSetup(Config{WorkspaceDir: missing}) {
+		t.Fatal("existing workspace should not require setup")
+	}
+}
+
+func TestSaveAndDismissFirstRunSetup(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	homeDir = func() string { return home }
+	t.Cleanup(func() { homeDir = systemHomeDir })
+
+	values := SetupValues{WorkspaceDir: filepath.Join(home, "Code"), DefaultBranch: "trunk", Editor: "nano"}
+	if err := SaveFirstRunSetup(values); err != nil {
+		t.Fatal(err)
+	}
+	if err := DismissFirstRunSetup(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".gitm8", ".gitm8rc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	for _, want := range []string{`GITM8_WORKSPACE_DIR="` + values.WorkspaceDir, `GITM8_DEFAULT_BRANCH="trunk"`, `GITM8_EDITOR="nano"`, `GITM8_FIRST_RUN_DISMISSED="true"`} {
+		if !strings.Contains(content, want) {
+			t.Errorf("saved config missing %q:\n%s", want, content)
+		}
+	}
+	if strings.Count(content, "GITM8_FIRST_RUN_DISMISSED=") != 1 {
+		t.Fatalf("dismissed setting should be replaced, not duplicated:\n%s", content)
+	}
+}
+
 // TestParseIdentity checks valid and invalid profile identity values.
 func TestParseIdentity(t *testing.T) {
 	cases := []struct {

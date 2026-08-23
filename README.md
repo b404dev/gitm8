@@ -260,6 +260,13 @@ That shortcut is hidden when the configured provider is not installed.
 
 ## Configuration
 
+On first launch, if the configured workspace directory (initially `~/Github`)
+does not exist, gitm8 opens a setup wizard. It collects the workspace path,
+global Git name and email, initial branch name, and editor. Nothing is written
+until the review screen is confirmed. After saving, the wizard can launch
+`gh auth login` interactively. Declining is recorded in the gitm8 dotfile so
+the wizard does not reappear.
+
 Configuration is loaded from `~/.gitm8/.gitm8rc`, then `~/.gitm8/gitm8rc`,
 then the legacy `~/.gitm8rc`, then `~/.gitm8/credentials`. Environment
 variables override defaults.
@@ -272,6 +279,8 @@ clear AI unavailable comment. If an existing config selects a missing provider,
 is installed.
 
 ```sh
+export GITM8_WORKSPACE_DIR="$HOME/Github"
+export GITM8_FIRST_RUN_DISMISSED="false"
 export GITM8_DEFAULT_BRANCH="main"
 export GITM8_EDITOR="vim"
 export GITM8_THEME="catppuccin"

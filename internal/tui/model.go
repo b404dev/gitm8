@@ -28,6 +28,9 @@ type Model struct {
 	branchInput      textinput.Model
 	fileFilter       textinput.Model
 	searchInput      textinput.Model
+	setupInputs      []textinput.Model
+	setupStep        int
+	setupStage       string
 	spinner          spinner.Model
 	loading          bool
 	info             git.RepoInfo
@@ -140,6 +143,11 @@ type squashLoadedMsg struct {
 	err     error
 }
 
+type setupFinishedMsg struct {
+	output string
+	err    error
+}
+
 // Startup
 
 // New builds the first UI state using the Git runner and loaded config.
@@ -170,7 +178,7 @@ func New(runner git.Runner, cfg config.Config) Model {
 	sp.Spinner = spinner.Dot
 	sp.Style = keyStyle
 
-	return Model{
+	model := Model{
 		runner:        runner,
 		config:        cfg,
 		review:        viewport.New(80, 24),
@@ -185,9 +193,19 @@ func New(runner git.Runner, cfg config.Config) Model {
 		splash:        true,
 		splashMessage: randomSplashMessage(),
 	}
+	if config.NeedsFirstRunSetup(cfg) {
+		model.splash = false
+		model.mode = "setup"
+		model.setupStage = "welcome"
+		model.setupInputs = newSetupInputs(runner, cfg)
+	}
+	return model
 }
 
 // Init starts the splash timer; loading the repository begins after the splash.
 func (m Model) Init() tea.Cmd {
+	if m.mode == "setup" {
+		return nil
+	}
 	return tickSplash()
 }

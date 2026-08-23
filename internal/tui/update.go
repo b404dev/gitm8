@@ -52,6 +52,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handlePushFinished(msg)
 	case commitMessageGeneratedMsg:
 		return m.handleCommitMessageGenerated(msg), nil
+	case setupFinishedMsg:
+		return m.handleSetupFinished(msg)
+	case setupAuthFinishedMsg:
+		return m.handleSetupAuthFinished(msg)
 	}
 
 	var cmd tea.Cmd
@@ -70,6 +74,9 @@ func (m Model) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		return m, nil
+	}
+	if m.mode == "setup" {
+		return m.updateSetup(msg)
 	}
 
 	if m.fileFilterActive {

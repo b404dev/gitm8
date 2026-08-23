@@ -69,6 +69,26 @@ func (r Runner) ForcePushUnconditionalOutput(ctx context.Context) (string, error
 
 // Git Config Commands
 
+// GlobalConfigValue reads one optional value from the user's global Git config.
+func (r Runner) GlobalConfigValue(ctx context.Context, key string) string {
+	return strings.TrimSpace(r.bestEffort(ctx, "config", "--global", "--get", key))
+}
+
+// ConfigureGlobalIdentityOutput writes first-run choices to global Git config.
+func (r Runner) ConfigureGlobalIdentityOutput(ctx context.Context, name, email, defaultBranch string) (string, error) {
+	settings := [][2]string{{"user.name", name}, {"user.email", email}, {"init.defaultBranch", defaultBranch}}
+	var outputs []string
+	for _, setting := range settings {
+		out, err := r.output(ctx, "config", "--global", setting[0], setting[1])
+		outputs = append(outputs, out)
+		if err != nil {
+			return joinOutput(outputs...), err
+		}
+	}
+	outputs = append(outputs, "Configured global Git identity and default branch.")
+	return joinOutput(outputs...), nil
+}
+
 // SetUpstreamOutput sets which remote branch the current local branch tracks.
 func (r Runner) SetUpstreamOutput(ctx context.Context, remote string, branch string) (string, error) {
 	remoteOut, err := r.output(ctx, "config", "branch."+branch+".remote", remote)
