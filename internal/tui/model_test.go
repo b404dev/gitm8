@@ -110,6 +110,29 @@ func TestHelpIsFullScreen(t *testing.T) {
 	}
 }
 
+func TestFileReaderMetadataAndFocus(t *testing.T) {
+	m := Model{width: 120, height: 30, mode: "preview", target: "internal/tui/view.go", viewerContent: "package tui\n\nfunc view() {}\n", readerFocus: true}
+	got := m.fileReaderHeader(90)
+	if !strings.Contains(got, "GO") || !strings.Contains(got, "3 lines") || !strings.Contains(got, "FOCUS") || !strings.Contains(got, "view.go") {
+		t.Fatalf("fileReaderHeader() = %q", got)
+	}
+}
+
+func TestFileLanguageFallback(t *testing.T) {
+	if got := fileLanguage("src/widget.zig"); got != "ZIG" {
+		t.Fatalf("fileLanguage() = %q, want ZIG", got)
+	}
+}
+
+func TestFocusedReaderDropsDashboardChrome(t *testing.T) {
+	m := Model{width: 100, height: 30, ready: true, mode: "preview", target: "main.go", viewerContent: "package main\n", readerFocus: true, review: viewport.New(80, 20)}
+	m.review.SetContent("package main\n")
+	got := m.View()
+	if !strings.Contains(got, "// READER") || strings.Contains(got, "Files") || strings.Contains(got, "No git output yet") {
+		t.Fatalf("focused reader retained dashboard chrome: %q", got)
+	}
+}
+
 // TestBranchesViewShowsSwitchWithChangesKey checks branch help mentions W.
 func TestBranchesViewShowsSwitchWithChangesKey(t *testing.T) {
 	got := branchesView([]string{"main"}, 0, 0, 5)
@@ -160,13 +183,19 @@ func TestFileListNameShowsBasenameOnly(t *testing.T) {
 	}
 }
 
-func TestOutputBarShowsSelectedFullPath(t *testing.T) {
+func TestPreviewOutputBarDoesNotRepeatSelectedPath(t *testing.T) {
 	m := Model{width: 120, mode: "preview", target: "src/deep/main.go"}
-	if got := m.outputBar(); !strings.Contains(got, "path src/deep/main.go") {
-		t.Fatalf("outputBar() = %q, want selected full path", got)
+	if got := m.outputBar(); strings.Contains(got, "path src/deep/main.go") {
+		t.Fatalf("outputBar() = %q, repeated path already shown by reader header", got)
 	}
-	if got := m.topBar(); strings.Contains(got, "path src/deep/main.go") {
-		t.Fatalf("topBar() = %q, want path only in output bar", got)
+}
+
+func TestSelectedFileRowFitsSidebarAsOneHighlight(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	m := Model{width: 100, height: 24, fileCursor: 0, files: []git.FileStatus{{Path: "deeply/nested/very-long-component-name.go", Worktree: 'M'}}}
+	got := m.filesPanel(15)
+	if lipgloss.Width(got) > m.filesWidth()+2 || !strings.Contains(got, "▸") || !strings.Contains(got, "name.go") {
+		t.Fatalf("filesPanel() width=%d content=%q", lipgloss.Width(got), got)
 	}
 }
 
@@ -388,12 +417,20 @@ func TestHighlightPreviewStylesNumberedCode(t *testing.T) {
 	}
 }
 
-// TestCommentStartIndexIgnoresCommentPrefixInsideString checks URLs are not treated as comments.
-func TestCommentStartIndexIgnoresCommentPrefixInsideString(t *testing.T) {
-	line := `fmt.Println("https://example.test") // real comment`
-	got := commentStartIndex("main.go", line)
-	want := strings.Index(line, " // real comment") + 1
-	if got != want {
-		t.Fatalf("commentStartIndex() = %d, want %d", got, want)
+func TestHighlightPreviewUnderstandsMultilineTokens(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme("catppuccin-mocha")
+	got := highlightPreview("main.go", "main.go\n\n1  var message = `first\n2  second`\n")
+	if !strings.Contains(got, "first") || !strings.Contains(got, "second") || strings.Count(got, "\x1b[") < 2 {
+		t.Fatalf("multiline Chroma output = %q", got)
+	}
+}
+
+func TestChromaThemeTracksGitm8Theme(t *testing.T) {
+	cases := map[string]string{"catppuccin": "catppuccin-mocha", "amber": "gruvbox", "mono": "bw", "midnight": "tokyonight-night"}
+	for theme, want := range cases {
+		if got := chromaThemeName(theme); got != want {
+			t.Fatalf("chromaThemeName(%q) = %q, want %q", theme, got, want)
+		}
 	}
 }

@@ -59,6 +59,8 @@ func (m Model) pushAction() (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	m.loading = true
+	m.toast = "Pushing…"
+	m.toastError = false
 	return m, tea.Batch(cmd, m.spinner.Tick)
 }
 
@@ -112,6 +114,8 @@ func (m Model) withNotice(notice string) Model {
 	m.notice = notice
 	m.err = nil
 	m.gitOutput = notice
+	m.toast = notice
+	m.toastError = false
 	logging.Info("tui", "withNotice", "notice", logging.F("message", notice))
 	return m
 }
@@ -125,6 +129,8 @@ func (m Model) action(success string, refresh bool, fn func(context.Context) (st
 		return m, cmd
 	}
 	m.loading = true
+	m.toast = success + "…"
+	m.toastError = false
 	logging.Info("tui", "action", "action_start", logging.F("success", success), logging.F("refresh", refresh))
 	return m, tea.Batch(cmd, m.spinner.Tick)
 }
