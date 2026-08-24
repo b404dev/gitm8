@@ -32,6 +32,34 @@ type Stash struct {
 	Subject string
 }
 
+// Release is one GitHub release row shown by the releases picker.
+type Release struct {
+	Tag        string
+	Name       string
+	Published  string
+	Draft      bool
+	Prerelease bool
+}
+
+// ReleaseAsset is a downloadable file attached to a GitHub release.
+type ReleaseAsset struct {
+	Name        string
+	Size        int64
+	ContentType string
+	URL         string
+}
+
+// ReleaseDetail contains the full metadata and notes for one GitHub release.
+type ReleaseDetail struct {
+	Release
+	Author          string
+	Body            string
+	URL             string
+	TargetCommitish string
+	Created         string
+	Assets          []ReleaseAsset
+}
+
 // Staged reports whether Git says this file has staged changes.
 func (f FileStatus) Staged() bool {
 	return f.Index != ' ' && f.Index != '?'

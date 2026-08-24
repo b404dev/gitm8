@@ -65,6 +65,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projects, m.err = msg.projects, msg.err
 		m.projectCursor = clamp(m.projectCursor, 0, max(0, len(m.projects)-1))
 		return m, nil
+	case releasesLoadedMsg:
+		m.releases, m.err = msg.releases, msg.err
+		m.releaseCursor = clamp(m.releaseCursor, 0, max(0, len(m.releases)-1))
+		return m, nil
+	case releaseCreatedMsg:
+		m.loading = false
+		m.err = msg.err
+		if msg.err != nil {
+			m.gitOutput = msg.err.Error()
+			m.releaseInputs[m.releaseInput].Focus()
+			return m, nil
+		}
+		m.gitOutput, m.notice = msg.output, msg.output
+		m.mode = "releases"
+		return m, loadReleases(m.runner)
+	case releaseDetailLoadedMsg:
+		m.releaseDetail, m.err = msg.detail, msg.err
+		if msg.err != nil {
+			m.review.SetContent(errorStyle.Render("! " + msg.err.Error()))
+		} else {
+			m.review.SetContent(releaseDetailContent(msg.detail))
+		}
+		m.review.GotoTop()
+		return m, nil
 	case projectOpenedMsg:
 		return m.handleProjectOpened(msg)
 	}
@@ -149,6 +173,15 @@ func (m Model) updateFocusedMode(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "search":
 		next, cmd := m.updateSearch(msg)
 		return next, cmd, true
+	case "releases":
+		next, cmd := m.updateReleases(msg)
+		return next, cmd, true
+	case "release-create":
+		next, cmd := m.updateReleaseCreate(msg)
+		return next, cmd, true
+	case "release-detail":
+		next, cmd := m.updateReleaseDetail(msg)
+		return next, cmd, true
 	}
 
 	return m, nil, false
@@ -160,6 +193,13 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "w":
 		return m.openWorkspace()
+	case "v":
+		m.mode = "releases"
+		m.notice = ""
+		m.err = nil
+		m.review.SetContent("Loading GitHub releases...\n")
+		m.review.GotoTop()
+		return m, loadReleases(m.runner)
 	case "o":
 		m.outputExpanded = !m.outputExpanded
 		logging.Info("tui", "updateDashboardKey", "output_toggle", logging.F("expanded", m.outputExpanded))
@@ -267,6 +307,7 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.review.GotoTop()
 		return m, nil
 	case "h":
+		m.helpReturn = m.mode
 		m.mode = "help"
 		m.notice = ""
 		m.err = nil
@@ -1357,7 +1398,19 @@ func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "esc", "h":
-		m.mode = "review"
+		returnMode := m.helpReturn
+		if returnMode == "" || returnMode == "help" {
+			returnMode = "review"
+		}
+		m.mode = returnMode
+		if returnMode == "release-detail" {
+			m.review.SetContent(releaseDetailContent(m.releaseDetail))
+			m.review.GotoTop()
+			return m, nil
+		}
+		if returnMode == "releases" {
+			return m, nil
+		}
 		return m, loadReview(m.runner, m.selectedPath())
 	default:
 		return m.updateViewportKey(msg)

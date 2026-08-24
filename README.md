@@ -152,6 +152,7 @@ mode.
 | `b` | Open branch switcher |
 | `l` | View recent commit logs |
 | `r` | Open pull request options |
+| `v` | List and create GitHub releases |
 | `R` | Rebase current branch onto another branch |
 | `i` | Switch Git identity profile |
 | `h` | Open help |
@@ -163,6 +164,15 @@ mode.
 | `pgdn` / `pgup` (`ctrl+f` / `ctrl+b`) | Scroll viewer by a page |
 | `g` / `G` | Jump viewer to top / bottom |
 | `q` / `ctrl+c` | Quit |
+
+### Releases
+
+Press `v` to list GitHub releases for the current repository. Press `n` to
+create one, enter its tag, title, and optional notes, and use `ctrl+d`, `ctrl+p`,
+or `ctrl+g` to toggle draft, prerelease, or GitHub-generated notes. GitHub
+creates the tag when it does not already exist. Release operations require an
+authenticated GitHub CLI (`gh`). Select a release and press `enter` to inspect
+its complete notes, author, target, URL, and downloadable assets.
 
 ### Branches
 
