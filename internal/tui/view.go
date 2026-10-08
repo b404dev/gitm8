@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/b404dev/gitm8/internal/git"
 )
@@ -125,28 +127,30 @@ func (m Model) outputBar() string {
 		if output == "" {
 			output = "working..."
 		}
-		return panelStyle.Width(m.panelWidth()).Render(m.outputBarPrefix() + keyStyle.Render("git ") + m.spinner.View() + " " + mutedStyle.Render(output))
+		return panelStyle.Width(m.panelWidth()).Render(m.outputBarPrefix() + warningStyle.Copy().Bold(true).Render("● RUNNING") + "  " + m.spinner.View() + " " + mutedStyle.Render(output))
 	}
 
 	output := strings.TrimSpace(m.gitOutput)
 	if output == "" {
-		output = "No git output yet"
+		output = "Ready — no command run yet"
 	}
 	style := mutedStyle
+	indicator := successStyle.Copy().Bold(true).Render("✓ GIT")
 	if m.err != nil {
 		style = errorStyle
+		indicator = errorStyle.Copy().Bold(true).Render("! GIT")
 	}
 
 	contentWidth := max(20, m.panelWidth()-6)
 	compact := oneLine(output)
 	if !m.outputExpanded {
-		return panelStyle.Width(m.panelWidth()).Render(m.outputBarPrefix() + keyStyle.Render("git ") + style.Render(trimMiddle(compact, contentWidth)))
+		return panelStyle.Width(m.panelWidth()).Render(m.outputBarPrefix() + indicator + "  " + style.Render(trimMiddle(compact, contentWidth)))
 	}
 
 	lines, truncated := visibleOutputLines(output, contentWidth, m.outputMaxLines())
 	var b strings.Builder
 	b.WriteString(m.outputBarPrefix())
-	b.WriteString(keyStyle.Render("git"))
+	b.WriteString(indicator)
 	if truncated > 0 {
 		fmt.Fprintf(&b, " %s", mutedStyle.Render(fmt.Sprintf("(%d earlier lines hidden)", truncated)))
 	}
@@ -160,7 +164,7 @@ func (m Model) outputBarPrefix() string {
 	if path == "" || m.mode != "review" {
 		return ""
 	}
-	return keyStyle.Render("path ") + mutedStyle.Render(path) + "  "
+	return keyStyle.Render("FILE") + " " + mutedStyle.Render(path) + "  ·  "
 }
 
 func (m Model) searchOutputBar() string {
@@ -212,27 +216,71 @@ func (m Model) topBar() string {
 	if m.info.LastPullSet {
 		lastPull = m.info.LastPull.Format("Jan 02 15:04")
 	}
-	sync := "SYNCED"
-	if m.info.Ahead > 0 || m.info.Behind > 0 {
-		sync = fmt.Sprintf("AHEAD %d  BEHIND %d", m.info.Ahead, m.info.Behind)
-	}
-	state := "CLEAN"
-	if m.info.Staged > 0 || m.info.Unstaged > 0 {
-		state = fmt.Sprintf("CHANGES %d", m.info.Staged+m.info.Unstaged)
-	}
 	repo := m.info.Repo
 	if repo == "" {
 		repo = "no repo"
 	}
-	items := []string{
-		titleStyle.Render("GITM8"), keyStyle.Render("// " + strings.ToUpper(viewerTitle(m.mode))),
-		activeStyle.Render(repo), mutedStyle.Render("@ " + m.info.Branch),
-		keyStyle.Render(state), keyStyle.Render(sync),
+
+	// On normal terminals the repository identity and its health get separate
+	// lines. This makes the status readable at a glance instead of presenting
+	// every value with the same visual weight.
+	section := titleStyle.Render("GITM8") + "  " + mutedStyle.Render("/") + "  " + keyStyle.Render(strings.ToUpper(viewerTitle(m.mode)))
+	identity := activeStyle.Copy().Bold(true).Render(repo) + "  " + mutedStyle.Render("on "+m.info.Branch)
+	if m.width < 72 {
+		available := max(16, m.panelWidth()-4)
+		if lipgloss.Width(section) > available {
+			modeWidth := max(4, available-len("GITM8  "))
+			section = titleStyle.Render("GITM8") + "  " + keyStyle.Render(trimMiddle(strings.ToUpper(viewerTitle(m.mode)), modeWidth))
+		}
+		repoWidth := available - lipgloss.Width(section) - 2
+		if repoWidth >= 6 {
+			section += "  " + activeStyle.Copy().Bold(true).Render(trimMiddle(repo, repoWidth))
+		}
+		return panelStyle.Width(m.panelWidth()).Render(section)
 	}
-	if m.width >= 110 {
-		items = append(items, mutedStyle.Render(upstream), mutedStyle.Render("pull "+lastPull), mutedStyle.Render(m.info.User))
+
+	innerWidth := max(20, m.panelWidth()-4)
+	identityBudget := max(12, innerWidth-lipgloss.Width(section)-2)
+	branchBudget := max(5, identityBudget/2)
+	repoBudget := max(5, identityBudget-branchBudget-4)
+	identity = activeStyle.Copy().Bold(true).Render(trimMiddle(repo, repoBudget)) + "  " + mutedStyle.Render("on "+trimMiddle(m.info.Branch, branchBudget))
+	firstLine := spreadLine(section, identity, innerWidth)
+	changeCount := m.info.Staged + m.info.Unstaged
+	state := successStyle.Copy().Bold(true).Render("● CLEAN")
+	changeDetail := mutedStyle.Render("working tree clear")
+	if changeCount > 0 {
+		state = warningStyle.Copy().Bold(true).Render(fmt.Sprintf("● %d CHANGES", changeCount))
+		changeDetail = mutedStyle.Render(fmt.Sprintf("%d staged · %d working", m.info.Staged, m.info.Unstaged))
 	}
-	return panelStyle.Width(m.panelWidth()).Render(strings.Join(items, "  "))
+	sync := successStyle.Copy().Bold(true).Render("↕ SYNCED")
+	if m.info.Ahead > 0 || m.info.Behind > 0 {
+		sync = warningStyle.Copy().Bold(true).Render(fmt.Sprintf("↑ %d  ↓ %d", m.info.Ahead, m.info.Behind))
+	}
+	status := strings.Join([]string{state, changeDetail, sync}, "  ")
+	contextText := upstream + "  ·  pulled " + lastPull
+	if m.width >= 118 && strings.TrimSpace(m.info.User) != "" {
+		contextText += "  ·  " + m.info.User
+	}
+	contextBudget := innerWidth - lipgloss.Width(status) - 2
+	context := ""
+	if contextBudget >= 8 {
+		context = mutedStyle.Render(trimMiddle(contextText, contextBudget))
+	}
+	secondLine := status
+	if context != "" {
+		secondLine = spreadLine(status, context, innerWidth)
+	}
+	return panelStyle.Width(m.panelWidth()).Render(firstLine + "\n" + secondLine)
+}
+
+// spreadLine keeps high-value context at opposite edges of a panel while
+// gracefully collapsing to a normal inline layout in tighter terminals.
+func spreadLine(left, right string, width int) string {
+	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 2 {
+		return left + "  " + right
+	}
+	return left + strings.Repeat(" ", gap) + right
 }
 
 func (m Model) feedbackBar() string {
@@ -261,12 +309,15 @@ func (m Model) filesPanelWithRows(height int, files []git.FileStatus) string {
 	panelHeight := max(1, height-2)
 	visibleRows := max(1, panelHeight-4)
 
-	lines := []string{titleStyle.Render("Files"), mutedStyle.Render("↑/↓ preview  enter edit")}
+	headerWidth := max(8, width-3)
+	header := spreadLine(titleStyle.Render("CHANGED FILES"), keyStyle.Render(fmt.Sprintf("%d", len(files))), headerWidth)
+	legend := successStyle.Render("S") + mutedStyle.Render(" staged  ") + warningStyle.Render("U") + mutedStyle.Render(" working")
+	lines := []string{header, legend, ""}
 	end := min(len(files), m.fileOffset+visibleRows)
 	for i := m.fileOffset; i < end; i++ {
 		file := files[i]
 		rowWidth := max(8, width-2)
-		name := trimMiddle(fileListName(file), max(4, rowWidth-6))
+		name := fileListLabel(file, max(4, rowWidth-7))
 		if i == m.fileCursor {
 			lines = append(lines, selectedStyle.Width(rowWidth).Render("▸ "+statusBadgeLabel(file)+" "+name))
 		} else {
@@ -274,15 +325,34 @@ func (m Model) filesPanelWithRows(height int, files []git.FileStatus) string {
 		}
 	}
 	if len(m.files) == 0 {
-		lines = append(lines, mutedStyle.Render("No changed files"))
+		lines = append(lines, successStyle.Render("✓ Working tree clean"), mutedStyle.Render("Nothing needs your attention."))
 	} else if len(files) == 0 {
-		lines = append(lines, mutedStyle.Render("No changed files match the current filter"))
+		lines = append(lines, mutedStyle.Render("No files match this filter."))
 	}
 	if len(files) > visibleRows {
 		lines = append(lines, mutedStyle.Render(fmt.Sprintf("%d-%d of %d", m.fileOffset+1, end, len(files))))
 	}
 
 	return panelStyle.Width(width).Height(panelHeight).Render(strings.Join(lines, "\n"))
+}
+
+// fileListLabel adds just enough parent-path context to distinguish files with
+// the same basename without turning the sidebar into a wall of paths.
+func fileListLabel(file git.FileStatus, width int) string {
+	name := fileListName(file)
+	if file.OldPath != "" || width < 18 {
+		return trimMiddle(name, width)
+	}
+	dir := filepath.Dir(strings.TrimSuffix(file.Path, "/"))
+	if dir == "." || dir == "" {
+		return trimMiddle(name, width)
+	}
+	location := dir + "/"
+	if lipgloss.Width(name)+lipgloss.Width(location)+2 > width {
+		location = trimMiddle(location, max(5, width/2))
+	}
+	name = trimMiddle(name, max(4, width-lipgloss.Width(location)-2))
+	return name + "  " + mutedStyle.Render(location)
 }
 
 // reviewPanel renders the active viewer title and viewport content.
@@ -300,8 +370,40 @@ func (m Model) reviewPanel(height int) string {
 		reader := lipgloss.JoinHorizontal(lipgloss.Top, m.review.View(), " ", m.readerRail(readerHeight))
 		return activePanelStyle.Width(reviewWidth).Height(reviewHeight).Render(meta + "\n" + reader)
 	}
-	title := titleStyle.Render("◆ " + viewerTitle(m.mode))
+	title := panelHeading(strings.ToUpper(viewerTitle(m.mode)), m.viewerContext(), max(16, reviewWidth-4))
 	return activePanelStyle.Width(reviewWidth).Height(reviewHeight).Render(title + "\n" + m.review.View())
+}
+
+func panelHeading(title, context string, width int) string {
+	left := keyStyle.Render("◆") + "  " + titleStyle.Render(title)
+	if strings.TrimSpace(context) == "" {
+		return left
+	}
+	contextWidth := width - lipgloss.Width(left) - 2
+	if contextWidth < 6 {
+		return left
+	}
+	return spreadLine(left, mutedStyle.Render(trimMiddle(context, contextWidth)), width)
+}
+
+func (m Model) viewerContext() string {
+	switch m.mode {
+	case "review":
+		if len(m.files) == 1 {
+			return "1 changed file"
+		}
+		return fmt.Sprintf("%d changed files", len(m.files))
+	case "branches", "rebase":
+		return fmt.Sprintf("%d branches", len(m.branches))
+	case "conflicts":
+		return fmt.Sprintf("%d unresolved", len(m.conflicts))
+	case "stashes":
+		return fmt.Sprintf("%d saved", len(m.stashes))
+	case "squash":
+		return fmt.Sprintf("%d commits", len(m.commits))
+	default:
+		return ""
+	}
 }
 
 func (m Model) fileReaderHeader(width int) string {
@@ -309,7 +411,16 @@ func (m Model) fileReaderHeader(width int) string {
 	if path == "" {
 		path = "file"
 	}
-	crumb := strings.ReplaceAll(trimMiddle(path, max(20, width-4)), "/", mutedStyle.Render("  ›  "))
+	name := filepath.Base(path)
+	directory := filepath.Dir(path)
+	headingWidth := max(12, width-4)
+	heading := keyStyle.Render("◇ ") + titleStyle.Render(ansi.Truncate(name, headingWidth-2, "…"))
+	if directory != "." {
+		remaining := headingWidth - lipgloss.Width(heading) - 3
+		if remaining >= 10 {
+			heading = spreadLine(heading, mutedStyle.Render(ansi.Truncate(directory+"/", remaining, "…")), headingWidth)
+		}
+	}
 	lines := 0
 	if m.viewerContent != "" {
 		lines = strings.Count(strings.TrimSuffix(m.viewerContent, "\n"), "\n") + 1
@@ -331,7 +442,7 @@ func (m Model) fileReaderHeader(width int) string {
 		metadataItems = []string{keyStyle.Render(strings.ToUpper(language)), mutedStyle.Render(fmt.Sprintf("%dL", lines)), keyStyle.Render(mode)}
 	}
 	metadata := strings.Join(metadataItems, "  •  ")
-	return titleStyle.Render("◇ "+crumb) + "\n" + metadata
+	return heading + "\n" + metadata
 }
 
 func (m Model) focusedReaderView() string {
@@ -339,8 +450,15 @@ func (m Model) focusedReaderView() string {
 	if repo == "" {
 		repo = "repository"
 	}
-	top := " " + titleStyle.Render("GITM8") + "  " + keyStyle.Render("// READER") + "  " + mutedStyle.Render(repo+"  @ "+m.info.Branch)
-	footer := mutedStyle.Width(max(20, m.width)).Render(strings.Join([]string{keyStyle.Render("[F]") + " split view", keyStyle.Render("[/]") + " find", keyStyle.Render("[j/k]") + " read", keyStyle.Render("[enter]") + " edit", keyStyle.Render("[q]") + " quit"}, "  "))
+	readerBrand := titleStyle.Render("GITM8") + "  " + keyStyle.Render("// READER")
+	readerWidth := max(20, m.width-2)
+	readerContextWidth := readerWidth - lipgloss.Width(readerBrand) - 2
+	top := " " + readerBrand
+	if readerContextWidth >= 8 {
+		readerContext := mutedStyle.Render(trimMiddle(repo+" on "+m.info.Branch, readerContextWidth))
+		top = " " + spreadLine(readerBrand, readerContext, readerWidth)
+	}
+	footer := mutedStyle.Width(max(20, m.width)).Render(strings.Join([]string{keyHint("F", "split view"), keyHint("/", "find"), keyHint("j/k", "read"), keyHint("enter", "edit"), keyHint("q", "quit")}, "  "))
 	bodyHeight := max(8, m.height-lipgloss.Height(top)-lipgloss.Height(footer)-1)
 	body := m.reviewPanel(bodyHeight)
 	return lipgloss.JoinVertical(lipgloss.Left, top, body, footer)
@@ -383,6 +501,87 @@ func (m Model) footer() string {
 		return ""
 	}
 	return mutedStyle.Width(max(20, m.width)).Render(strings.Join(rows, "\n"))
+}
+
+// shortcutVisible controls presentation only; key handling remains unchanged.
+func (m Model) shortcutVisible(id string) bool {
+	if len(m.config.KeyReference) == 0 {
+		for _, defaultID := range m.defaultMainFooterIDs() {
+			if defaultID == id {
+				return true
+			}
+		}
+		return false
+	}
+	for _, selected := range m.config.KeyReference {
+		if selected == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) defaultMainFooterIDs() []string {
+	ids := []string{"help", "move-files", "find-file", "quit"}
+	if m.width >= 96 {
+		ids = []string{"help", "move-files", "edit-file", "focus-reader", "find-file", "commit", "push-pull", "quit"}
+	}
+	return ids
+}
+
+func mainFooterLabel(id string) string {
+	labels := map[string]string{
+		"move-files": "files", "edit-file": "edit", "review-repository": "review",
+		"toggle-diff": "diff", "find-file": "find", "discard-file": "discard",
+		"stage-files": "stage", "unstage-files": "unstage", "stash-file": "stash",
+		"commit": "commit", "fetch": "fetch", "push-pull": "push/pull",
+		"squash": "squash", "conflicts": "conflicts", "stashes": "stashes",
+		"branches": "branches", "switch-with-changes": "switch+changes", "logs": "logs",
+		"identity": "identity", "pull-request": "PR", "releases": "releases",
+		"command-palette": "commands", "themes": "themes", "focus-reader": "focus",
+		"rebase": "rebase", "help": "all keys", "output": "output",
+		"toggle-keybar": "key bar", "yazi": "yazi", "scroll-lines": "scroll",
+		"scroll-page": "page", "jump-viewer": "top/bottom", "quit": "quit",
+	}
+	return labels[id]
+}
+
+func (m Model) mainFooterRows() []string {
+	var items []string
+	for _, key := range m.helpKeys() {
+		if m.shortcutVisible(key.id) {
+			label := mainFooterLabel(key.id)
+			if key.id == "find-file" {
+				label = "filter files"
+				if m.mode == "preview" {
+					label = "find in file"
+				}
+			}
+			items = append(items, keyHint(key.key, label))
+		}
+	}
+	var rows []string
+	line := ""
+	for _, item := range items {
+		candidate := item
+		if line != "" {
+			candidate = line + "  " + item
+		}
+		if line != "" && lipgloss.Width(candidate) > max(20, m.width) {
+			rows = append(rows, line)
+			line = item
+			continue
+		}
+		line = candidate
+	}
+	if line != "" {
+		rows = append(rows, line)
+	}
+	return rows
+}
+
+func keyHint(key, label string) string {
+	return keycapStyle.Render(key) + " " + mutedStyle.Render(label)
 }
 
 func (m Model) footerRows() []string {
@@ -540,20 +739,7 @@ func (m Model) footerRows() []string {
 			}, "  "),
 		}
 	default:
-		filterLabel := "filter files"
-		if m.mode == "preview" {
-			filterLabel = "find in file"
-		}
-		items := []string{
-			keyStyle.Render("[h]") + " all keys",
-			keyStyle.Render("[↑/↓]") + " files",
-			keyStyle.Render("[/]") + " " + filterLabel,
-			keyStyle.Render("[q]") + " quit",
-		}
-		if m.width >= 96 {
-			items = []string{keyStyle.Render("[h]") + " all keys", keyStyle.Render("[↑/↓]") + " files", keyStyle.Render("[enter]") + " edit", keyStyle.Render("[F]") + " focus", keyStyle.Render("[/]") + " " + filterLabel, keyStyle.Render("[c]") + " commit", keyStyle.Render("[P]") + " push", keyStyle.Render("[q]") + " quit"}
-		}
-		return []string{strings.Join(items, "  ")}
+		return m.mainFooterRows()
 	}
 }
 
@@ -567,12 +753,14 @@ func statusBadge(file git.FileStatus) string {
 		return keyStyle.Render(label)
 	case file.Deleted():
 		return errorStyle.Render(label)
-	case file.Staged() && file.Unstaged():
-		return activeStyle.Render(label)
-	case file.Staged():
+	case file.Index == '?':
 		return keyStyle.Render(label)
+	case file.Staged() && file.Unstaged():
+		return warningStyle.Render(label)
+	case file.Staged():
+		return successStyle.Render(label)
 	case file.Unstaged():
-		return mutedStyle.Render(label)
+		return warningStyle.Render(label)
 	default:
 		return mutedStyle.Render(label)
 	}
@@ -868,12 +1056,34 @@ func (m Model) commitPromptHelp() string {
 
 // Help View
 
-// helpView renders the in-app reference for keys, config, profiles, and docs.
-func (m Model) helpView() string {
-	var b strings.Builder
-	b.WriteString("Press esc or h to return  ·  j/k to scroll\n\n")
+type helpKey struct {
+	id          string
+	key         string
+	description string
+}
 
-	b.WriteString(titleStyle.Render("KEYS") + "\n")
+type helpListItem struct {
+	key      helpKey
+	selected bool
+}
+
+func (i helpListItem) FilterValue() string {
+	return i.key.id + " " + i.key.key + " " + i.key.description
+}
+
+func (i helpListItem) Title() string {
+	mark := "[ ]"
+	if i.selected {
+		mark = "[x]"
+	}
+	return fmt.Sprintf("%s  %-16s %s", mark, i.key.key, i.key.description)
+}
+
+func (i helpListItem) Description() string {
+	return ""
+}
+
+func (m Model) helpKeys() []helpKey {
 	commitHelp := "commit staged changes"
 	if m.config.AIAvailable {
 		commitHelp = "commit staged changes (ctrl+g generates a message in commit mode)"
@@ -882,97 +1092,144 @@ func (m Model) helpView() string {
 	if m.config.MattMode {
 		pushHelp = "pull (--ff-only) / push (matt_mode: always --force, no safety net)"
 	}
-	keys := [][2]string{
-		{"↑/↓", "move file selection (previews it)"},
-		{"enter", "open the viewed file in GITM8_EDITOR"},
-		{"0", "back to the repo-wide code review"},
-		{"d", "toggle the selected file between diff and contents"},
-		{"/", "search and highlight inside the viewed file contents"},
-		{"x", "discard all changes to selected file"},
-		{"s / S", "stage selected file / stage all"},
-		{"u / U", "unstage selected file / unstage all"},
-		{"n", "stash selected file"},
-		{"c", commitHelp},
-		{"f", "fetch (--all --prune)"},
-		{"p / P", pushHelp},
-		{"z", "mark commits, choose a base, squash in-TUI (no editor)"},
-		{"C", "conflict mode for unmerged files"},
-		{"t", "stash panel"},
-		{"b", "branch switcher"},
-		{"W", "in branch switcher: switch and bring current changes"},
-		{"l", "view recent commit logs"},
-		{"i", "identity switcher (git user profiles)"},
-		{"r", "pull request options"},
-		{"v", "list and create GitHub releases"},
-		{": / ctrl+k", "searchable command palette"},
-		{"T", "preview and switch themes"},
-		{"F", "toggle focused file reader while previewing"},
-		{"R", "rebase the current branch onto another"},
-		{"h", "this help"},
-		{"o", "expand or collapse the git output box"},
-		{"tab", "hide or show the footer key bar"},
-		{"y", "open the yazi file manager"},
-		{"j/k", "scroll the viewer line by line"},
-		{"pgdn/pgup", "scroll the viewer by a page"},
-		{"g / G", "jump viewer to top / bottom"},
-		{"q / ctrl+c", "quit"},
+	return []helpKey{
+		{"move-files", "↑/↓", "move file selection (previews it)"},
+		{"edit-file", "enter", "open the viewed file in GITM8_EDITOR"},
+		{"review-repository", "0", "back to the repo-wide code review"},
+		{"toggle-diff", "d", "toggle the selected file between diff and contents"},
+		{"find-file", "/", "search and highlight inside the viewed file contents"},
+		{"discard-file", "x", "discard all changes to selected file"},
+		{"stage-files", "s / S", "stage selected file / stage all"},
+		{"unstage-files", "u / U", "unstage selected file / unstage all"},
+		{"stash-file", "n", "stash selected file"},
+		{"commit", "c", commitHelp},
+		{"fetch", "f", "fetch (--all --prune)"},
+		{"push-pull", "p / P", pushHelp},
+		{"squash", "z", "mark commits, choose a base, squash in-TUI (no editor)"},
+		{"conflicts", "C", "conflict mode for unmerged files"},
+		{"stashes", "t", "stash panel"},
+		{"branches", "b", "branch switcher"},
+		{"switch-with-changes", "W", "in branch switcher: switch and bring current changes"},
+		{"logs", "l", "view recent commit logs"},
+		{"identity", "i", "identity switcher (git user profiles)"},
+		{"pull-request", "r", "pull request options"},
+		{"releases", "v", "list and create GitHub releases"},
+		{"command-palette", ": / ctrl+k", "searchable command palette"},
+		{"themes", "T", "preview and switch themes"},
+		{"focus-reader", "F", "toggle focused file reader while previewing"},
+		{"rebase", "R", "rebase the current branch onto another"},
+		{"help", "h", "this help"},
+		{"output", "o", "expand or collapse the git output box"},
+		{"toggle-keybar", "tab", "hide or show the footer key bar"},
+		{"yazi", "y", "open the yazi file manager"},
+		{"scroll-lines", "j/k", "scroll the viewer line by line"},
+		{"scroll-page", "pgdn/pgup", "scroll the viewer by a page"},
+		{"jump-viewer", "g / G", "jump viewer to top / bottom"},
+		{"quit", "q / ctrl+c", "quit"},
 	}
-	for _, k := range keys {
-		fmt.Fprintf(&b, "  %s  %s\n", keyStyle.Render(fmt.Sprintf("%-11s", k[0])), k[1])
+}
+
+func (m Model) filteredHelpKeys() []helpKey {
+	query := strings.ToLower(strings.TrimSpace(m.helpInput.Value()))
+	allKeys := m.helpKeys()
+	if query == "" {
+		return allKeys
 	}
-
-	b.WriteString("\n" + titleStyle.Render("CONFIG") + "\n")
-	b.WriteString("  Loaded from ~/.gitm8/.gitm8rc, ~/.gitm8/gitm8rc, legacy ~/.gitm8rc, then credentials.\n")
-	b.WriteString("  Env vars override defaults.\n")
-	b.WriteString("  Themes: " + strings.Join(themeNames(), ", ") + ".\n")
-	for _, line := range []string{
-		"GITM8_DEFAULT_BRANCH", "GITM8_EDITOR", "GITM8_THEME",
-		"GITM8_CONFIRM_DESTRUCTIVE_ACTIONS", "GITM8_FETCH_ON_STARTUP",
-		"GITM8_SHOW_COMMIT_GRAPH", "GITM8_AI_PROVIDER",
-		"GITM8_OLLAMA_URL",
-	} {
-		fmt.Fprintf(&b, "    %s\n", line)
+	type scoredHelpKey struct {
+		key   helpKey
+		score int
 	}
+	var scored []scoredHelpKey
+	for _, key := range allKeys {
+		haystack := strings.ToLower(key.id + " " + key.key + " " + key.description)
+		if score, ok := fuzzyLineScore(haystack, query); ok {
+			scored = append(scored, scoredHelpKey{key: key, score: score})
+		}
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
+	})
+	result := make([]helpKey, 0, len(scored))
+	for _, item := range scored {
+		result = append(result, item.key)
+	}
+	return result
+}
 
-	b.WriteString("\n" + titleStyle.Render("PROFILES") + "\n")
-	b.WriteString("  Define identities in ~/.gitm8/profiles, one per line:\n")
-	b.WriteString("    Work = Ada Lovelace <ada@work.example>\n")
-	b.WriteString("  Press i to switch; sets git user for this repo only.\n")
+func (m Model) helpKeySelected(id string) bool {
+	if m.helpSelected == nil {
+		return true
+	}
+	return m.helpSelected[id]
+}
 
-	b.WriteString("\n" + titleStyle.Render("RELEASES") + "\n")
-	b.WriteString("  v             open GitHub releases\n")
-	b.WriteString("  ↑/↓ or j/k    choose a release\n")
-	b.WriteString("  enter         inspect notes, metadata, and assets\n")
-	b.WriteString("  n             create a release\n")
-	b.WriteString("  r             refresh releases\n")
-	b.WriteString("  ctrl+d        toggle draft while creating\n")
-	b.WriteString("  ctrl+p        toggle prerelease while creating\n")
-	b.WriteString("  ctrl+g        toggle generated notes while creating\n")
-	b.WriteString("  esc           return\n")
-
-	b.WriteString("\n" + titleStyle.Render("DOCS") + "\n")
-	b.WriteString("  See README.md for full documentation.\n")
+// helpView renders the interactive shortcut selector.
+func (m Model) helpView() string {
+	if m.helpListReady {
+		return m.helpList.View()
+	}
+	keys := m.filteredHelpKeys()
+	maxRows := max(4, m.height-13)
+	start := clamp(m.helpCursor-maxRows+1, 0, max(0, len(keys)-maxRows))
+	end := min(len(keys), start+maxRows)
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("MAIN PANEL SHORTCUTS") + "\n")
+	b.WriteString(mutedStyle.Render("Choose which labels appear in the main key bar; shortcuts stay active") + "\n")
+	b.WriteString(mutedStyle.Render("Type to filter like fzf; ↑/↓ or j/k move; space toggles; enter saves") + "\n\n")
+	b.WriteString(m.helpInput.View() + "\n\n")
+	for i := start; i < end; i++ {
+		key := keys[i]
+		marker := "[ ]"
+		if m.helpKeySelected(key.id) {
+			marker = "[x]"
+		}
+		line := fmt.Sprintf("%s %-16s %s", marker, key.key, key.description)
+		if i == m.helpCursor {
+			line = selectedStyle.Width(max(20, m.width-8)).Render("▸ " + line)
+		}
+		b.WriteString(line + "\n")
+	}
+	if len(keys) == 0 {
+		b.WriteString(mutedStyle.Render("No matching shortcuts") + "\n")
+	}
+	if len(keys) > maxRows {
+		fmt.Fprintf(&b, "\n%s\n", mutedStyle.Render(fmt.Sprintf("%d-%d of %d", start+1, end, len(keys))))
+	}
+	b.WriteString("\n" + mutedStyle.Render("esc cancel  enter save  ctrl+c quit"))
 	return b.String()
 }
 
 // helpScreenView gives the complete key reference the full terminal instead of
 // squeezing it beside the changed-files panel.
 func (m Model) helpScreenView() string {
-	contentWidth := max(40, m.width-4)
-	header := panelStyle.Width(contentWidth).Render(strings.Join([]string{
-		titleStyle.Render("gitm8") + "  " + keyStyle.Render("KEYBOARD REFERENCE"),
-		mutedStyle.Render("Every command, in one place"),
-	}, "\n"))
-	footer := mutedStyle.Width(max(20, m.width)).Render(strings.Join([]string{
-		keyStyle.Render("[j/k]") + " scroll",
-		keyStyle.Render("[pgup/pgdn]") + " page",
-		keyStyle.Render("[g/G]") + " top/bottom",
-		keyStyle.Render("[esc/h]") + " close",
-	}, "  "))
-	bodyHeight := max(8, m.height-lipgloss.Height(header)-lipgloss.Height(footer)-1)
-	m.review.Width = max(20, contentWidth-4)
-	m.review.Height = max(1, bodyHeight-4)
-	body := panelStyle.Width(contentWidth).Height(max(1, bodyHeight-2)).Render(m.review.View())
+	return m.renderHelpScreen()
+}
+
+// renderHelpScreen also lays out the list. Input handling uses the same layout
+// so pagination and the highlighted item agree with what is drawn.
+func (m *Model) renderHelpScreen() string {
+	contentWidth := max(20, m.width-4)
+	header := brandHeader(contentWidth, "ALL KEYS", "Your commands, at a glance")
+	intro := titleStyle.Render("MAIN KEY BAR") + "  " + mutedStyle.Render("Choose the shortcuts shown in your footer")
+	legend := keyStyle.Render("●") + mutedStyle.Render(" visible    ○ hidden    ·    All shortcuts remain active")
+	hints := []string{keyHint("↑/↓", "move"), keyHint("/", "search"), keyHint("space", "toggle"), keyHint("enter", "save"), keyHint("esc", "cancel")}
+	if m.helpListReady && m.helpList.FilterInput.Focused() {
+		hints = []string{keyHint("type", "search"), keyHint("enter", "browse results"), keyHint("esc", "clear search")}
+	}
+	footer := lipgloss.NewStyle().Width(max(20, m.width)).Render(strings.Join(hints, "   "))
+	innerWidth := max(16, contentWidth-2)
+	detail := m.shortcutDetail(innerWidth)
+	if m.toastError {
+		detail = errorStyle.Render(m.toast)
+	}
+	summary := lipgloss.NewStyle().Width(innerWidth).Render(intro + "\n" + legend)
+	bodyHeight := max(6, m.height-lipgloss.Height(header)-lipgloss.Height(footer))
+	listHeight := max(3, bodyHeight-2-lipgloss.Height(summary)-lipgloss.Height(detail)-3)
+	if m.helpListReady {
+		m.helpList.SetSize(innerWidth, listHeight)
+	}
+	content := summary + "\n\n" + m.helpView() + "\n" + mutedStyle.Render(strings.Repeat("─", innerWidth)) + "\n" + detail
+	body := activePanelStyle.Width(contentWidth).Height(max(1, bodyHeight-2)).Render(content)
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 

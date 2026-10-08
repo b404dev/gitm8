@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -83,6 +84,12 @@ type Model struct {
 	target               string
 	mode                 string
 	helpReturn           string
+	helpInput            textinput.Model
+	helpCursor           int
+	helpSelected         map[string]bool
+	helpOriginal         map[string]bool
+	helpList             list.Model
+	helpListReady        bool
 	returnMode           string
 	themeCursor          int
 	commandCursor        int
@@ -227,6 +234,11 @@ func New(runner git.Runner, cfg config.Config) Model {
 	searchInput.CharLimit = 160
 	searchInput.Prompt = "/ "
 
+	helpInput := textinput.New()
+	helpInput.Placeholder = "filter shortcuts"
+	helpInput.CharLimit = 120
+	helpInput.Prompt = "/ "
+
 	commandInput := textinput.New()
 	commandInput.Placeholder = "Type a command"
 	commandInput.CharLimit = 120
@@ -255,6 +267,7 @@ func New(runner git.Runner, cfg config.Config) Model {
 		branchInput:     branchInput,
 		fileFilter:      fileFilter,
 		searchInput:     searchInput,
+		helpInput:       helpInput,
 		commandInput:    commandInput,
 		spinner:         sp,
 		releaseNotes:    releaseNotes,

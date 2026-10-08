@@ -210,6 +210,6 @@ func (m Model) workspaceDetailPanel(width, height int) string {
 }
 
 func (m Model) workspaceFooter() string {
-	items := []string{keyStyle.Render("[↑/↓]") + " choose", keyStyle.Render("[enter]") + " open", keyStyle.Render("[c]") + " clone", keyStyle.Render("[n]") + " create", keyStyle.Render("[r]") + " refresh", keyStyle.Render("[esc]") + " back", keyStyle.Render("[q]") + " quit"}
+	items := []string{keyHint("↑/↓", "choose"), keyHint("enter", "open"), keyHint("c", "clone"), keyHint("n", "create"), keyHint("r", "refresh"), keyHint("esc", "back"), keyHint("q", "quit")}
 	return mutedStyle.Width(max(20, m.width)).Render(strings.Join(items, "  "))
 }

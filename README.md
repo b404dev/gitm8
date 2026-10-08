@@ -322,6 +322,9 @@ export GITM8_THEME="catppuccin"
 export GITM8_CONFIRM_DESTRUCTIVE_ACTIONS="true"
 export GITM8_FETCH_ON_STARTUP="false"
 export GITM8_SHOW_COMMIT_GRAPH="true"
+# Comma-separated action IDs shown in the main footer; configure with h.
+# Unset uses the compact defaults; "none" hides every footer label.
+export GITM8_KEY_REFERENCE="move-files,edit-file,stage-files,commit,quit"
 export GITM8_AI_PROVIDER="codex" # codex, claude, or ollama
 export GITM8_OLLAMA_URL="http://localhost:11434"
 export GITM8_LOG_ENABLED="true"
@@ -330,6 +333,28 @@ export GITM8_LOG_FILE="$HOME/.gitm8/gitm8.log"
 ```
 
 An example config is available at [`configs/gitm8rc.example`](configs/gitm8rc.example).
+
+Press `h` to open All Keys in browse mode. Use `↑`/`↓` or `j`/`k` to move,
+and `space` to toggle a label in the main dashboard footer, including Help
+and Quit. Press `/` to search, then `enter` to browse the results or `esc`
+to clear the search. While browsing, `enter` saves the selection and `esc`
+cancels (or clears an applied search first). Hiding a label never disables
+its keyboard shortcut. Other screens retain their contextual action hints.
+
+The visible-label selection is persisted through `GITM8_KEY_REFERENCE`, a
+comma-separated allow-list of individual action IDs. Available IDs are:
+
+`move-files`, `edit-file`, `review-repository`, `toggle-diff`, `find-file`,
+`discard-file`, `stage-files`, `unstage-files`, `stash-file`, `commit`, `fetch`,
+`push-pull`, `squash`, `conflicts`, `stashes`, `branches`,
+`switch-with-changes`, `logs`, `identity`, `pull-request`, `releases`,
+`command-palette`, `themes`, `focus-reader`, `rebase`, `help`, `output`,
+`toggle-keybar`, `yazi`, `scroll-lines`, `scroll-page`, `jump-viewer`, and
+`quit`.
+
+Leave it unset to use the compact, width-dependent defaults. Set it to `none`
+to hide all main footer labels; `h` still opens All Keys. Unknown IDs do not
+add labels, and duplicate IDs are ignored.
 
 Logs are written as plain text and do not use stdout or stderr during normal TUI
 use. The log format is:

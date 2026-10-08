@@ -4,6 +4,30 @@ All notable changes to `gitm8` are documented here.
 
 This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-10-08
+
+### Added
+
+- Branded All Keys browser with searchable shortcuts, aligned action rows,
+  visibility indicators, and selected-command details.
+- Persistent main-footer customization through All Keys and
+  `GITM8_KEY_REFERENCE`. Every label can be hidden without disabling its key.
+- Color swatches in the theme picker and semantic status colors across themes.
+
+### Changed
+
+- Separated repository identity and Git status in the dashboard header.
+- Improved file-list context, empty states, viewer headings, and reader titles.
+- Lightweight footer shortcuts and clearer command-output status indicators.
+- All Keys starts in browse mode; `/` explicitly starts search.
+
+### Fixed
+
+- Shortcut toggles follow the visible selection across pages and searches.
+- Delayed search results no longer overwrite shortcut visibility changes.
+- Help and Quit respect visibility settings; hiding every label stays saved.
+- File and release mouse selection aligns with the updated layout.
+
 ## [2.1.0] - 2026-08-23
 
 A smoother first-run and multi-project workflow for developers who launch
@@ -78,6 +102,7 @@ Initial public release. Terminal UI for common Git workflows, driving the
 installed `git` binary so existing configuration, SSH keys, credential helpers,
 hooks, aliases, and signing behavior continue to work.
 
+[3.1.0]: https://github.com/b404dev/gitm8/compare/v3.0.0...v3.1.0
 [2.1.0]: https://github.com/b404dev/gitm8/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/b404dev/gitm8/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/b404dev/gitm8/releases/tag/v1.0.0

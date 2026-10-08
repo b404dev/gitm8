@@ -11,6 +11,13 @@ export GITM8_CONFIRM_DESTRUCTIVE_ACTIONS="true"
 export GITM8_FETCH_ON_STARTUP="false"
 export GITM8_SHOW_COMMIT_GRAPH="true"
 
+# Individual labels shown in the main key bar opened/configured with h.
+# You can edit this here or use the interactive selector in the app.
+# Unset uses compact defaults; "none" hides all main footer labels.
+# Example IDs: move-files, edit-file, stage-files,
+# commit, branches, themes, quit.
+# export GITM8_KEY_REFERENCE="move-files,edit-file,stage-files,commit,quit"
+
 # matt_mode: always force push with a raw --force when you push, with no
 # rejection prompt and no safety net (can clobber remote commits). Off by default.
 export GITM8_MATT_MODE="false"

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -79,6 +80,23 @@ func TestApplyEnvMattMode(t *testing.T) {
 	}
 }
 
+func TestParseKeyReferenceTrimsAndDeduplicates(t *testing.T) {
+	got := parseKeyReference(" move-files,commit, move-files, ,COMMIT ")
+	want := []string{"move-files", "commit"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseKeyReference() = %#v, want %#v", got, want)
+	}
+}
+
+func TestApplyEnvKeyReference(t *testing.T) {
+	t.Setenv("GITM8_KEY_REFERENCE", "move-files,commit")
+	cfg := defaults()
+	applyEnv(&cfg)
+	if !reflect.DeepEqual(cfg.KeyReference, []string{"move-files", "commit"}) {
+		t.Fatalf("KeyReference = %#v, want move-files and commit", cfg.KeyReference)
+	}
+}
+
 // TestDefaultConfigContentIncludesMattMode keeps matt_mode in generated configs.
 func TestDefaultConfigContentIncludesMattMode(t *testing.T) {
 	got := defaultConfigContent(defaults())
@@ -129,6 +147,23 @@ func TestSaveAndDismissFirstRunSetup(t *testing.T) {
 	}
 	if strings.Count(content, "GITM8_FIRST_RUN_DISMISSED=") != 1 {
 		t.Fatalf("dismissed setting should be replaced, not duplicated:\n%s", content)
+	}
+}
+
+func TestSaveKeyReferencePersistsSelectedIDs(t *testing.T) {
+	home := t.TempDir()
+	homeDir = func() string { return home }
+	t.Cleanup(func() { homeDir = systemHomeDir })
+
+	if err := SaveKeyReference([]string{"move-files", "quit"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".gitm8", ".gitm8rc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `GITM8_KEY_REFERENCE="move-files,quit"`) {
+		t.Fatalf("saved key reference missing:\n%s", data)
 	}
 }
 

@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/b404dev/gitm8/internal/config"
 	"github.com/b404dev/gitm8/internal/git"
 	"github.com/b404dev/gitm8/internal/logging"
 )
@@ -24,12 +26,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.resizeReview()
+		if m.mode == "help" && m.helpListReady {
+			m.renderHelpScreen()
+		}
 		logging.Debug("tui", "Update", "window_resized", logging.F("width", msg.Width), logging.F("height", msg.Height))
 		return m, nil
 	case splashTickMsg:
 		return m.updateSplash(msg)
 	case tea.KeyMsg:
 		return m.updateKey(msg)
+	case list.FilterMatchesMsg:
+		// Help applies searches synchronously. Delayed matches contain old item
+		// values and must not overwrite visibility toggles made since typing.
+		return m, nil
 	case repoLoadedMsg:
 		// A repository load started before the user opened the project picker
 		// must not pull the UI back into a "no repo" dashboard when it finishes.
@@ -337,13 +346,7 @@ func (m Model) updateDashboardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.review.GotoTop()
 		return m, nil
 	case "h":
-		m.helpReturn = m.mode
-		m.mode = "help"
-		m.notice = ""
-		m.err = nil
-		m.review.SetContent(m.helpView())
-		m.review.GotoTop()
-		return m, nil
+		return m.openHelpSelector()
 	case "s":
 		file, ok := m.selectedFile()
 		if !ok {
@@ -1426,12 +1429,110 @@ func (m Model) applySelectedProfile() (tea.Model, tea.Cmd) {
 
 // Help Screen Keys
 
-// updateHelp lets help scroll while escape or h returns to the main screen.
+func (m Model) openHelpSelector() (tea.Model, tea.Cmd) {
+	m.helpReturn = m.mode
+	m.mode = "help"
+	m.helpCursor = 0
+	m.helpInput.SetValue("")
+	m.helpInput.Blur()
+	m.helpSelected = make(map[string]bool)
+	if len(m.config.KeyReference) == 0 {
+		for _, id := range m.defaultMainFooterIDs() {
+			m.helpSelected[id] = true
+		}
+	} else {
+		for _, id := range m.config.KeyReference {
+			m.helpSelected[id] = true
+		}
+	}
+	m.helpOriginal = make(map[string]bool, len(m.helpSelected))
+	for id, selected := range m.helpSelected {
+		m.helpOriginal[id] = selected
+	}
+	items := make([]list.Item, 0, len(m.helpKeys()))
+	for _, key := range m.helpKeys() {
+		items = append(items, helpListItem{key: key, selected: m.helpSelected[key.id]})
+	}
+	m.helpList = list.New(items, shortcutDelegate{}, max(20, m.width-8), max(8, m.height-10))
+	styles := list.DefaultStyles()
+	styles.FilterPrompt = keyStyle.Copy().Bold(true)
+	styles.FilterCursor = activeStyle.Copy()
+	styles.StatusBar = mutedStyle.Copy().PaddingLeft(1)
+	styles.StatusBarActiveFilter = activeStyle.Copy().Bold(true)
+	styles.StatusBarFilterCount = keyStyle.Copy()
+	styles.NoItems = mutedStyle.Copy().Italic(true).PaddingLeft(1)
+	styles.PaginationStyle = mutedStyle.Copy().PaddingLeft(1)
+	styles.HelpStyle = mutedStyle.Copy().PaddingLeft(1)
+	m.helpList.Styles = styles
+	m.helpList.Title = ""
+	m.helpList.SetShowTitle(false)
+	m.helpList.SetShowFilter(true)
+	m.helpList.SetShowStatusBar(true)
+	m.helpList.SetShowPagination(true)
+	m.helpList.SetShowHelp(false)
+	m.helpList.SetStatusBarItemName("shortcut", "shortcuts")
+	m.helpList.FilterInput.Prompt = "/ "
+	m.helpList.FilterInput.Placeholder = "Search shortcuts…"
+	m.helpList.FilterInput.TextStyle = activeStyle
+	m.helpList.FilterInput.PromptStyle = keyStyle
+	m.helpList.FilterInput.PlaceholderStyle = mutedStyle
+	m.helpList.FilterInput.Cursor.Style = keyStyle
+	m.helpList.Paginator.ActiveDot = keyStyle.Render("━")
+	m.helpList.Paginator.InactiveDot = mutedStyle.Render("─")
+	m.helpList.ResetFilter()
+	m.helpList.FilterInput.Blur()
+	m.helpList.SetSize(max(20, m.width-8), max(8, m.height-10))
+	m.helpListReady = true
+	m.renderHelpScreen()
+	return m, nil
+}
+
+func (m Model) selectedHelpIDs() []string {
+	var ids []string
+	for _, key := range m.helpKeys() {
+		if m.helpSelected[key.id] {
+			ids = append(ids, key.id)
+		}
+	}
+	if len(ids) == 0 {
+		// An empty configuration means defaults; preserve an explicitly empty footer.
+		return []string{"none"}
+	}
+	return ids
+}
+
+// updateHelp separates browsing shortcuts from explicitly editing a search.
 func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.renderHelpScreen()
+	if m.helpList.FilterState() == list.Filtering && msg.String() != "ctrl+c" {
+		switch msg.String() {
+		case "esc":
+			m.helpList.ResetFilter()
+			m.helpList.FilterInput.Blur()
+			return m, nil
+		case "enter":
+			m.helpList.SetFilterText(m.helpList.FilterInput.Value())
+			m.helpList.FilterInput.Blur()
+			return m, nil
+		default:
+			var cmd tea.Cmd
+			m.helpList, cmd = m.helpList.Update(msg)
+			m.helpList.SetFilterText(m.helpList.FilterInput.Value())
+			m.helpList.SetFilterState(list.Filtering)
+			return m, cmd
+		}
+	}
 	switch msg.String() {
-	case "q", "ctrl+c":
+	case "ctrl+c":
 		return m, tea.Quit
-	case "esc", "h":
+	case "esc":
+		if m.helpList.FilterState() == list.FilterApplied {
+			m.helpList.ResetFilter()
+			m.helpList.FilterInput.Blur()
+			return m, nil
+		}
+		m.helpSelected = m.helpOriginal
+		m.helpInput.Blur()
 		returnMode := m.helpReturn
 		if returnMode == "" || returnMode == "help" {
 			returnMode = "review"
@@ -1446,7 +1547,45 @@ func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, loadReview(m.runner, m.selectedPath())
+	case "enter":
+		ids := m.selectedHelpIDs()
+		if err := config.SaveKeyReference(ids); err != nil {
+			m.toast, m.toastError = "Could not save shortcuts: "+err.Error(), true
+			return m, nil
+		}
+		m.config.KeyReference = ids
+		m.helpInput.Blur()
+		m.toast, m.toastError = "Keyboard shortcuts saved", false
+		returnMode := m.helpReturn
+		if returnMode == "" || returnMode == "help" {
+			returnMode = "review"
+		}
+		m.mode = returnMode
+		if returnMode == "release-detail" {
+			m.review.SetContent(releaseDetailContent(m.releaseDetail))
+			m.review.GotoTop()
+			return m, nil
+		}
+		return m, nil
+	case "up", "k", "down", "j":
+		var cmd tea.Cmd
+		m.helpList, cmd = m.helpList.Update(msg)
+		return m, cmd
+	case "space", " ":
+		if item, ok := m.helpList.SelectedItem().(helpListItem); ok {
+			item.selected = !item.selected
+			m.helpSelected[item.key.id] = item.selected
+			m.helpList.SetItem(m.helpList.GlobalIndex(), item)
+			if m.helpList.FilterState() == list.FilterApplied {
+				index := m.helpList.Index()
+				m.helpList.SetFilterText(m.helpList.FilterInput.Value())
+				m.helpList.Select(index)
+			}
+		}
+		return m, nil
 	default:
-		return m.updateViewportKey(msg)
+		var cmd tea.Cmd
+		m.helpList, cmd = m.helpList.Update(msg)
+		return m, cmd
 	}
 }

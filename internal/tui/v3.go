@@ -165,7 +165,7 @@ func (m Model) themesView() string {
 	end := min(len(names), start+maxRows)
 	lines := []string{titleStyle.Render("Choose your gitm8 look"), mutedStyle.Render(fmt.Sprintf("%d built-in themes", len(names))), ""}
 	for i := start; i < end; i++ {
-		line := "  " + names[i]
+		line := "  " + themeSwatch(names[i]) + "  " + names[i]
 		if names[i] == m.config.Theme {
 			line += "  ✓ current"
 		}
@@ -180,8 +180,26 @@ func (m Model) themesView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, body)
 }
 
+func themeSwatch(name string) string {
+	pal, ok := palettes[name]
+	if !ok {
+		return ""
+	}
+	colors := []lipgloss.Color{pal.title, pal.key, firstColor(pal.positive, pal.active), firstColor(pal.warning, pal.key), pal.error}
+	var blocks []string
+	for _, color := range colors {
+		blocks = append(blocks, lipgloss.NewStyle().Background(color).Render("  "))
+	}
+	return strings.Join(blocks, "")
+}
+
 func brandHeader(width int, section, subtitle string) string {
-	return panelStyle.Width(width).Render(titleStyle.Render("GITM8") + "  " + keyStyle.Render("// "+section) + "\n" + mutedStyle.Render(subtitle))
+	brand := titleStyle.Render("GITM8") + "  " + keyStyle.Render("// "+section)
+	contentWidth := max(20, width-4)
+	if lipgloss.Width(brand)+lipgloss.Width(subtitle)+2 > contentWidth {
+		return panelStyle.Width(width).Render(brand + "\n" + mutedStyle.Render(subtitle))
+	}
+	return panelStyle.Width(width).Render(spreadLine(brand, mutedStyle.Render(subtitle), contentWidth))
 }
 
 // updateMouse adds trackpad navigation while preserving keyboard-first flows.
@@ -197,7 +215,8 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.mode == "releases" {
-			row := event.Y - 8
+			header := brandHeader(max(40, m.width-4), "RELEASES", "Publish and inspect GitHub releases")
+			row := event.Y - lipgloss.Height(header) - 4
 			if row >= 0 {
 				maxRows := max(1, m.height-10)
 				start := clamp(m.releaseCursor-maxRows+1, 0, max(0, len(m.releases)-maxRows))
@@ -209,7 +228,7 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if (m.mode == "review" || m.mode == "preview") && m.width >= 76 && event.X <= m.filesWidth()+2 {
-			row := event.Y - lipgloss.Height(m.header()) - 3
+			row := event.Y - lipgloss.Height(m.header()) - 4
 			files := m.filteredFiles()
 			index := m.fileOffset + row
 			if row >= 0 && index < len(files) {

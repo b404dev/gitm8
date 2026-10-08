@@ -345,6 +345,25 @@ Fetch from all remotes with pruning before the dashboard opens.
 .B GITM8_SHOW_COMMIT_GRAPH
 Show graph lines in the commit log view.
 .TP
+.B GITM8_KEY_REFERENCE
+Comma-separated action ID allow-list for labels shown in the main key bar.
+Press
+.B h
+to edit it interactively.
+The selector opens in browse mode. Press / to search, Enter to browse the
+results, or Escape to clear the search. Browse line by line with
+.B up/down
+or
+.BR j/k ,
+Space to toggle the highlighted shortcut, Enter to save, and Escape to cancel.
+For example:
+.B move-files,edit-file,stage-files,commit,quit .
+Hiding a label does not disable its keyboard shortcut. See the README for the
+complete list of action IDs.
+Unset uses compact, width-dependent defaults. Set to none to hide all main
+footer labels, including Help and Quit; their keyboard shortcuts remain active.
+Other screens retain their contextual action hints.
+.TP
 .B GITM8_AI_PROVIDER
 AI CLI used for generated commit messages and pull request text.
 Supported values:

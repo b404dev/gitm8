@@ -22,6 +22,7 @@ type Config struct {
 	ConfirmDestructiveActions bool
 	FetchOnStartup            bool
 	ShowCommitGraph           bool
+	KeyReference              []string
 	MattMode                  bool
 	AIProvider                string
 	OllamaURL                 string
@@ -168,6 +169,11 @@ func defaultConfigContent(cfg Config) string {
 	b.WriteString("export GITM8_CONFIRM_DESTRUCTIVE_ACTIONS=\"" + strconv.FormatBool(cfg.ConfirmDestructiveActions) + "\"\n")
 	b.WriteString("export GITM8_FETCH_ON_STARTUP=\"" + strconv.FormatBool(cfg.FetchOnStartup) + "\"\n")
 	b.WriteString("export GITM8_SHOW_COMMIT_GRAPH=\"" + strconv.FormatBool(cfg.ShowCommitGraph) + "\"\n")
+	if len(cfg.KeyReference) > 0 {
+		b.WriteString("export GITM8_KEY_REFERENCE=\"" + configValue(strings.Join(cfg.KeyReference, ",")) + "\"\n")
+	} else {
+		b.WriteString("# export GITM8_KEY_REFERENCE=\"move-files,edit-file,commit\" # unset uses compact defaults; none hides all labels\n")
+	}
 	b.WriteString("# matt_mode: always force push with a raw --force (no safety net, no prompt).\n")
 	b.WriteString("export GITM8_MATT_MODE=\"" + strconv.FormatBool(cfg.MattMode) + "\"\n")
 	if !cfg.AIAvailable && cfg.AIUnavailableReason != "" {
@@ -255,6 +261,7 @@ func defaults() Config {
 		ConfirmDestructiveActions: true,
 		FetchOnStartup:            false,
 		ShowCommitGraph:           true,
+		KeyReference:              nil,
 		MattMode:                  false,
 		AIProvider:                provider,
 		OllamaURL:                 "http://localhost:11434",
@@ -339,6 +346,7 @@ func applyEnv(cfg *Config) {
 	cfg.ConfirmDestructiveActions = envBool("GITM8_CONFIRM_DESTRUCTIVE_ACTIONS", cfg.ConfirmDestructiveActions)
 	cfg.FetchOnStartup = envBool("GITM8_FETCH_ON_STARTUP", cfg.FetchOnStartup)
 	cfg.ShowCommitGraph = envBool("GITM8_SHOW_COMMIT_GRAPH", cfg.ShowCommitGraph)
+	cfg.KeyReference = parseKeyReference(envString("GITM8_KEY_REFERENCE", strings.Join(cfg.KeyReference, ",")))
 	cfg.MattMode = envBool("GITM8_MATT_MODE", cfg.MattMode)
 	provider := envString("GITM8_AI_PROVIDER", envString("GITM8_COMMIT_MESSAGE_PROVIDER", cfg.AIProvider))
 	cfg.AIProvider = normalizeAIProvider(provider)
@@ -348,6 +356,22 @@ func applyEnv(cfg *Config) {
 	cfg.LogFile = expandHomePath(envString("GITM8_LOG_FILE", cfg.LogFile))
 	cfg.GithubToken = os.Getenv("GITM8_GITHUB_TOKEN")
 	cfg.GitlabToken = os.Getenv("GITM8_GITLAB_TOKEN")
+}
+
+// parseKeyReference returns configured help-panel action IDs. An empty value
+// means that the compact default footer should be shown.
+func parseKeyReference(value string) []string {
+	var result []string
+	seen := make(map[string]bool)
+	for _, item := range strings.Split(value, ",") {
+		item = strings.ToLower(strings.TrimSpace(item))
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		result = append(result, item)
+	}
+	return result
 }
 
 // NeedsFirstRunSetup reports whether the onboarding wizard should be shown.
@@ -388,6 +412,17 @@ func SaveTheme(theme string) error {
 	return writeSetupValues(map[string]string{"GITM8_THEME": theme})
 }
 
+// SaveKeyReference persists the shortcuts selected in the help panel.
+func SaveKeyReference(keys []string) error {
+	value := strings.Join(keys, ",")
+	if value == "" {
+		value = "none"
+	}
+	return writeSetupValues(map[string]string{
+		"GITM8_KEY_REFERENCE": value,
+	})
+}
+
 func writeSetupValues(values map[string]string) error {
 	dir := filepath.Join(homeDir(), ".gitm8")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -407,7 +442,7 @@ func writeSetupValues(values map[string]string) error {
 		kept = append(kept, line)
 	}
 	kept = append(kept, "", "# Managed by gitm8.")
-	for _, key := range []string{"GITM8_WORKSPACE_DIR", "GITM8_DEFAULT_BRANCH", "GITM8_EDITOR", "GITM8_FIRST_RUN_DISMISSED", "GITM8_THEME"} {
+	for _, key := range []string{"GITM8_WORKSPACE_DIR", "GITM8_DEFAULT_BRANCH", "GITM8_EDITOR", "GITM8_FIRST_RUN_DISMISSED", "GITM8_THEME", "GITM8_KEY_REFERENCE"} {
 		if value, ok := values[key]; ok {
 			kept = append(kept, "export "+key+"=\""+configValue(value)+"\"")
 		}

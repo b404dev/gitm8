@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
@@ -94,7 +96,7 @@ func TestSplashViewShowsStartupContent(t *testing.T) {
 }
 
 func TestDashboardFooterPointsToFullScreenKeys(t *testing.T) {
-	m := Model{mode: "review"}
+	m := Model{width: 80, mode: "review"}
 	rows := m.footerRows()
 	if len(rows) != 1 || !strings.Contains(rows[0], "all keys") {
 		t.Fatalf("footerRows() = %#v, want one compact row pointing to help", rows)
@@ -105,7 +107,7 @@ func TestHelpIsFullScreen(t *testing.T) {
 	m := Model{width: 100, height: 30, ready: true, mode: "help", review: viewport.New(80, 20)}
 	m.review.SetContent(m.helpView())
 	got := m.View()
-	if !strings.Contains(got, "KEYBOARD REFERENCE") || strings.Contains(got, "Files") {
+	if !strings.Contains(got, "MAIN KEY BAR") || strings.Contains(got, "Files") {
 		t.Fatalf("help View() did not render as a dedicated full-screen view: %q", got)
 	}
 }
@@ -183,6 +185,16 @@ func TestFileListNameShowsBasenameOnly(t *testing.T) {
 	}
 }
 
+func TestFileListLabelAddsParentContextWhenSpaceAllows(t *testing.T) {
+	got := fileListLabel(git.FileStatus{Path: "internal/tui/view.go"}, 28)
+	if !strings.Contains(got, "view.go") || !strings.Contains(got, "internal/tui/") {
+		t.Fatalf("fileListLabel() = %q, want basename and parent context", got)
+	}
+	if lipgloss.Width(got) > 28 {
+		t.Fatalf("fileListLabel() width = %d, want <= 28", lipgloss.Width(got))
+	}
+}
+
 func TestPreviewOutputBarDoesNotRepeatSelectedPath(t *testing.T) {
 	m := Model{width: 120, mode: "preview", target: "src/deep/main.go"}
 	if got := m.outputBar(); strings.Contains(got, "path src/deep/main.go") {
@@ -256,7 +268,8 @@ func TestCommitPromptHelpHidesGenerateWhenAIUnavailable(t *testing.T) {
 
 // TestHelpViewIncludesSquashKey documents the dashboard squash workflow.
 func TestHelpViewIncludesSquashKey(t *testing.T) {
-	m := Model{config: config.Config{AIAvailable: true}}
+	m := Model{width: 100, height: 30, config: config.Config{AIAvailable: true}}
+	m.helpInput.SetValue("squash")
 	got := m.helpView()
 	if !strings.Contains(got, "mark commits, choose a base") {
 		t.Fatalf("helpView() = %q, want squash key help", got)
@@ -265,7 +278,8 @@ func TestHelpViewIncludesSquashKey(t *testing.T) {
 
 // TestHelpViewIncludesDiscardKey documents the guarded discard workflow.
 func TestHelpViewIncludesDiscardKey(t *testing.T) {
-	m := Model{}
+	m := Model{width: 100, height: 30}
+	m.helpInput.SetValue("discard")
 	got := m.helpView()
 	if !strings.Contains(got, "discard all changes to selected file") {
 		t.Fatalf("helpView() = %q, want discard key help", got)
@@ -273,10 +287,182 @@ func TestHelpViewIncludesDiscardKey(t *testing.T) {
 }
 
 func TestHelpViewIncludesFindKey(t *testing.T) {
-	m := Model{}
+	m := Model{width: 100, height: 30}
+	m.helpInput.SetValue("find")
 	got := m.helpView()
 	if !strings.Contains(got, "search and highlight inside the viewed file contents") {
 		t.Fatalf("helpView() = %q, want find key help", got)
+	}
+}
+
+func TestHelpViewUsesConfiguredKeyIDs(t *testing.T) {
+	m := Model{width: 100, height: 60, config: config.Config{KeyReference: []string{"move-files", "quit"}}, helpSelected: map[string]bool{"move-files": true, "quit": true}}
+	got := m.helpView()
+	if !strings.Contains(got, "move file selection") || !strings.Contains(got, "quit") {
+		t.Fatalf("helpView() = %q, want navigation keys", got)
+	}
+	if !strings.Contains(got, "[ ] s / S") || !strings.Contains(got, "[ ] x") {
+		t.Fatalf("helpView() = %q, want unselected shortcuts available to re-enable", got)
+	}
+}
+
+func TestHelpViewWithoutKeyConfigurationShowsAllKeys(t *testing.T) {
+	m := Model{width: 100, height: 30}
+	m.helpInput.SetValue("discard")
+	got := m.helpView()
+	if !strings.Contains(got, "discard all changes") {
+		t.Fatalf("helpView() = %q, want default full key reference", got)
+	}
+}
+
+func TestHelpSelectorTogglesCurrentShortcut(t *testing.T) {
+	m := Model{config: config.Config{KeyReference: []string{"move-files"}}, helpInput: textinput.New()}
+	opened, _ := m.openHelpSelector()
+	m = opened.(Model)
+	if !m.helpSelected["move-files"] {
+		t.Fatal("move-files should start selected")
+	}
+	next, _ := m.updateHelp(tea.KeyMsg{Type: tea.KeySpace})
+	if next.(Model).helpSelected["move-files"] {
+		t.Fatal("space should deselect the current shortcut")
+	}
+}
+
+func TestHelpSelectorFiltersIDsAndDescriptions(t *testing.T) {
+	m := Model{width: 100, height: 30, helpInput: textinput.New()}
+	m.helpInput.SetValue("squash")
+	keys := m.filteredHelpKeys()
+	if len(keys) != 1 || keys[0].id != "squash" {
+		t.Fatalf("filteredHelpKeys() = %#v, want squash only", keys)
+	}
+}
+
+func TestHelpSelectorUsesBubblesListPresentation(t *testing.T) {
+	m := Model{width: 100, height: 30, helpInput: textinput.New()}
+	opened, _ := m.openHelpSelector()
+	m = opened.(Model)
+	got := m.helpView()
+	if !strings.Contains(got, "●") || !strings.Contains(got, "○") || !strings.Contains(got, "shortcuts") {
+		t.Fatalf("helpView() = %q, want list selection and status presentation", got)
+	}
+}
+
+func TestHelpSelectorSearchFiltersWhileTyping(t *testing.T) {
+	m := Model{width: 100, height: 30, helpInput: textinput.New()}
+	opened, _ := m.openHelpSelector()
+	m = opened.(Model)
+	for _, r := range "/squash" {
+		next, _ := m.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = next.(Model)
+	}
+	items := m.helpList.VisibleItems()
+	if len(items) != 1 || items[0].(helpListItem).key.id != "squash" {
+		t.Fatalf("filtered shortcut items = %#v, want squash only", items)
+	}
+}
+
+func TestHelpSelectorSpaceTogglesFilteredShortcut(t *testing.T) {
+	m := Model{width: 100, height: 30, helpInput: textinput.New()}
+	opened, _ := m.openHelpSelector()
+	m = opened.(Model)
+	for _, r := range "/squash" {
+		next, _ := m.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = next.(Model)
+	}
+	if item := m.helpList.SelectedItem().(helpListItem); item.selected {
+		t.Fatal("squash should start hidden")
+	}
+	accepted, _ := m.updateHelp(tea.KeyMsg{Type: tea.KeyEnter})
+	m = accepted.(Model)
+	next, _ := m.updateHelp(tea.KeyMsg{Type: tea.KeySpace})
+	m = next.(Model)
+	item := m.helpList.SelectedItem().(helpListItem)
+	if !item.selected || !m.helpSelected["squash"] {
+		t.Fatalf("squash after space = %#v, selected IDs = %#v", item, m.helpSelected)
+	}
+}
+
+func TestHelpOpensInBrowseMode(t *testing.T) {
+	m := Model{width: 100, height: 30, mode: "review", helpInput: textinput.New()}
+	opened, _ := m.openHelpSelector()
+	m = opened.(Model)
+	if m.helpList.FilterInput.Focused() {
+		t.Fatal("help opens with search focused")
+	}
+	next, _ := m.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = next.(Model)
+	if m.helpList.Index() != 1 || m.helpList.FilterInput.Value() != "" {
+		t.Fatal("j should navigate without searching")
+	}
+	next, _ = m.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = next.(Model)
+	if !m.helpList.FilterInput.Focused() {
+		t.Fatal("/ should focus search")
+	}
+	next, _ = m.updateHelp(tea.KeyMsg{Type: tea.KeyEsc})
+	m = next.(Model)
+	if m.mode != "help" || m.helpList.FilterInput.Focused() {
+		t.Fatal("escape from search should return to browsing")
+	}
+}
+
+func TestHelpToggleMatchesVisibleSelectionAcrossPages(t *testing.T) {
+	m := Model{width: 80, height: 24, mode: "review", helpInput: textinput.New()}
+	opened, _ := m.openHelpSelector()
+	m = opened.(Model)
+	for i := 0; i < 25; i++ {
+		next, _ := m.updateHelp(tea.KeyMsg{Type: tea.KeyDown})
+		m = next.(Model)
+		visible := m
+		visible.renderHelpScreen()
+		item := visible.helpList.SelectedItem().(helpListItem)
+		next, _ = m.updateHelp(tea.KeyMsg{Type: tea.KeySpace})
+		m = next.(Model)
+		if m.helpSelected[item.key.id] == item.selected {
+			t.Fatalf("space did not toggle visible shortcut %s on step %d", item.key.id, i)
+		}
+	}
+}
+
+func TestHelpSavingNoOptionalShortcutsDoesNotRestoreDefaults(t *testing.T) {
+	m := Model{width: 100, helpSelected: map[string]bool{}}
+	m.config.KeyReference = m.selectedHelpIDs()
+	for _, key := range m.helpKeys() {
+		if m.shortcutVisible(key.id) {
+			t.Fatalf("unexpected visibility for %s after clearing optional shortcuts", key.id)
+		}
+	}
+}
+
+func TestEveryListedShortcutCanBeToggled(t *testing.T) {
+	for index, key := range (Model{}).helpKeys() {
+		t.Run(key.id, func(t *testing.T) {
+			m := Model{width: 100, height: 30, mode: "review", helpInput: textinput.New()}
+			opened, _ := m.openHelpSelector()
+			m = opened.(Model)
+			m.helpList.Select(index)
+			before := m.helpList.SelectedItem().(helpListItem).selected
+			next, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+			m = next.(Model)
+			if m.helpList.SelectedItem().(helpListItem).selected == before {
+				t.Fatal("Space did not toggle the listed shortcut")
+			}
+			m.config.KeyReference = m.selectedHelpIDs()
+			if m.shortcutVisible(key.id) == before {
+				t.Fatal("footer visibility did not follow the toggle")
+			}
+		})
+	}
+}
+
+func TestMainFooterVisibilityDoesNotDisableShortcuts(t *testing.T) {
+	m := Model{width: 120, mode: "review", config: config.Config{KeyReference: []string{"commit"}}}
+	footer := m.footer()
+	if !strings.Contains(footer, "commit") {
+		t.Fatalf("footer() = %q, want selected label", footer)
+	}
+	if strings.Contains(footer, "files") || strings.Contains(footer, "edit") || strings.Contains(footer, "focus") || strings.Contains(footer, "all keys") || strings.Contains(footer, "quit") {
+		t.Fatalf("footer() = %q, hidden labels are still visible", footer)
 	}
 }
 

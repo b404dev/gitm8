@@ -17,6 +17,9 @@ var (
 	activePanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("86")).Padding(0, 1)
 	activeStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("229"))
 	selectedStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229")).Background(lipgloss.Color("240"))
+	successStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("114"))
+	warningStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	keycapStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
 
 	syntaxKeywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
 	syntaxStringStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("229"))
@@ -36,26 +39,30 @@ type palette struct {
 	stringLit lipgloss.Color
 	comment   lipgloss.Color
 	number    lipgloss.Color
+	positive  lipgloss.Color
+	warning   lipgloss.Color
+	selection lipgloss.Color
+	selected  lipgloss.Color
 }
 
 var palettes = map[string]palette{
-	"default":              {title: "212", error: "196", muted: "241", key: "86", border: "240", active: "229"},
-	"ocean":                {title: "39", error: "203", muted: "244", key: "81", border: "31", active: "195"},
-	"forest":               {title: "114", error: "203", muted: "244", key: "150", border: "65", active: "230"},
-	"amber":                {title: "214", error: "203", muted: "245", key: "222", border: "94", active: "229"},
-	"mono":                 {title: "255", error: "255", muted: "245", key: "252", border: "240", active: "255"},
-	"rose":                 {title: "204", error: "196", muted: "245", key: "218", border: "132", active: "225"},
-	"violet":               {title: "141", error: "203", muted: "245", key: "177", border: "61", active: "189"},
-	"cyan":                 {title: "51", error: "203", muted: "244", key: "87", border: "37", active: "159"},
-	"lime":                 {title: "154", error: "203", muted: "245", key: "190", border: "70", active: "229"},
-	"steel":                {title: "75", error: "203", muted: "246", key: "117", border: "67", active: "252"},
-	"highvis":              {title: "226", error: "196", muted: "250", key: "46", border: "226", active: "231"},
-	"midnight":             {title: "111", error: "210", muted: "244", key: "153", border: "60", active: "195"},
-	"catppuccin":           {title: "#cba6f7", error: "#f38ba8", muted: "#6c7086", key: "#89b4fa", border: "#45475a", active: "#f9e2af"},
-	"catppuccin-mocha":     {title: "#cba6f7", error: "#f38ba8", muted: "#6c7086", key: "#89b4fa", border: "#45475a", active: "#f9e2af"},
-	"catppuccin-macchiato": {title: "#c6a0f6", error: "#ed8796", muted: "#6e738d", key: "#8aadf4", border: "#494d64", active: "#eed49f"},
-	"catppuccin-frappe":    {title: "#ca9ee6", error: "#e78284", muted: "#737994", key: "#8caaee", border: "#51576d", active: "#e5c890"},
-	"catppuccin-latte":     {title: "#8839ef", error: "#d20f39", muted: "#8c8fa1", key: "#1e66f5", border: "#ccd0da", active: "#df8e1d"},
+	"default":              {title: "212", error: "196", muted: "241", key: "86", border: "240", active: "229", positive: "114", warning: "214", selection: "236", selected: "255"},
+	"ocean":                {title: "39", error: "203", muted: "244", key: "81", border: "31", active: "195", positive: "84", warning: "221", selection: "24", selected: "231"},
+	"forest":               {title: "114", error: "203", muted: "244", key: "150", border: "65", active: "230", positive: "114", warning: "221", selection: "22", selected: "230"},
+	"amber":                {title: "214", error: "203", muted: "245", key: "222", border: "94", active: "229", positive: "114", warning: "214", selection: "58", selected: "230"},
+	"mono":                 {title: "255", error: "255", muted: "245", key: "252", border: "240", active: "255", positive: "255", warning: "252", selection: "238", selected: "255"},
+	"rose":                 {title: "204", error: "196", muted: "245", key: "218", border: "132", active: "225", positive: "114", warning: "222", selection: "53", selected: "231"},
+	"violet":               {title: "141", error: "203", muted: "245", key: "177", border: "61", active: "189", positive: "114", warning: "222", selection: "53", selected: "231"},
+	"cyan":                 {title: "51", error: "203", muted: "244", key: "87", border: "37", active: "159", positive: "84", warning: "221", selection: "23", selected: "231"},
+	"lime":                 {title: "154", error: "203", muted: "245", key: "190", border: "70", active: "229", positive: "154", warning: "221", selection: "22", selected: "231"},
+	"steel":                {title: "75", error: "203", muted: "246", key: "117", border: "67", active: "252", positive: "114", warning: "221", selection: "24", selected: "255"},
+	"highvis":              {title: "226", error: "196", muted: "250", key: "46", border: "226", active: "231", positive: "46", warning: "226", selection: "238", selected: "231"},
+	"midnight":             {title: "111", error: "210", muted: "244", key: "153", border: "60", active: "195", positive: "114", warning: "222", selection: "17", selected: "231"},
+	"catppuccin":           {title: "#cba6f7", error: "#f38ba8", muted: "#6c7086", key: "#89b4fa", border: "#45475a", active: "#f9e2af", positive: "#a6e3a1", warning: "#fab387", selection: "#313244", selected: "#cdd6f4"},
+	"catppuccin-mocha":     {title: "#cba6f7", error: "#f38ba8", muted: "#6c7086", key: "#89b4fa", border: "#45475a", active: "#f9e2af", positive: "#a6e3a1", warning: "#fab387", selection: "#313244", selected: "#cdd6f4"},
+	"catppuccin-macchiato": {title: "#c6a0f6", error: "#ed8796", muted: "#6e738d", key: "#8aadf4", border: "#494d64", active: "#eed49f", positive: "#a6da95", warning: "#f5a97f", selection: "#363a4f", selected: "#cad3f5"},
+	"catppuccin-frappe":    {title: "#ca9ee6", error: "#e78284", muted: "#737994", key: "#8caaee", border: "#51576d", active: "#e5c890", positive: "#a6d189", warning: "#ef9f76", selection: "#414559", selected: "#c6d0f5"},
+	"catppuccin-latte":     {title: "#8839ef", error: "#d20f39", muted: "#8c8fa1", key: "#1e66f5", border: "#ccd0da", active: "#df8e1d", positive: "#40a02b", warning: "#fe640b", selection: "#dce0e8", selected: "#4c4f69"},
 }
 
 // applyTheme changes the shared styles to use the requested color theme.
@@ -74,7 +81,12 @@ func applyTheme(name string) {
 	panelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.border).Padding(0, 1)
 	activePanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.key).Padding(0, 1)
 	activeStyle = lipgloss.NewStyle().Foreground(pal.active)
-	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(pal.active).Background(pal.border)
+	successStyle = lipgloss.NewStyle().Foreground(firstColor(pal.positive, lipgloss.Color("114")))
+	warningStyle = lipgloss.NewStyle().Foreground(firstColor(pal.warning, lipgloss.Color("214")))
+	selection := firstColor(pal.selection, pal.border)
+	selected := firstColor(pal.selected, pal.active)
+	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(selected).Background(selection)
+	keycapStyle = lipgloss.NewStyle().Bold(true).Foreground(pal.key)
 	syntaxKeywordStyle = lipgloss.NewStyle().Foreground(firstColor(pal.keyword, pal.title))
 	syntaxStringStyle = lipgloss.NewStyle().Foreground(firstColor(pal.stringLit, pal.active))
 	syntaxCommentStyle = lipgloss.NewStyle().Foreground(firstColor(pal.comment, pal.muted))
